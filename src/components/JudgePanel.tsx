@@ -257,7 +257,7 @@ export default function JudgePanel() {
       </main>
 
       {/* FOOTER / REAL-TIME LEADERBOARD */}
-      {gameState && gameState.status !== 'setup' && teams.length > 0 && (
+      {gameState && teams.length > 0 && (
         <footer className="bg-slate-900/60 border-t border-slate-800/80 backdrop-blur-md p-4 space-y-2">
           <div className="max-w-2xl mx-auto w-full space-y-2">
             <div className="flex justify-between items-center border-b border-slate-800/80 pb-2">
