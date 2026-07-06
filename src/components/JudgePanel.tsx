@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GameState, Question, Team } from '../types';
 import { subscribeToGameState, subscribeToTeams, subscribeToQuestions, submitJudgeVote } from '../lib/gameService';
-import { Check, X, ShieldAlert, User, Scale, Activity } from 'lucide-react';
+import { Check, X, ShieldAlert, User, Scale, Activity, Star } from 'lucide-react';
 
 export default function JudgePanel() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -255,6 +255,51 @@ export default function JudgePanel() {
           </div>
         )}
       </main>
+
+      {/* FOOTER / REAL-TIME LEADERBOARD */}
+      {gameState && gameState.status !== 'setup' && teams.length > 0 && (
+        <footer className="bg-slate-900/60 border-t border-slate-800/80 backdrop-blur-md p-4 space-y-2">
+          <div className="max-w-2xl mx-auto w-full space-y-2">
+            <div className="flex justify-between items-center border-b border-slate-800/80 pb-2">
+              <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1.5">
+                <Star className="w-3.5 h-3.5 text-amber-400 fill-current" /> Tabela de Classificação em Tempo Real
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">Sincronizado automaticamente</span>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {teams.map((t, idx) => {
+                const isEliminated = gameState.eliminatedTeamIds?.includes(t.id);
+                const isActive = gameState.currentTeamId === t.id;
+                return (
+                  <div
+                    key={t.id}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border transition-all ${
+                      isEliminated ? 'bg-slate-950 border-slate-900 text-slate-600 opacity-40 line-through' :
+                      isActive
+                        ? 'bg-amber-400/10 border-amber-500/30 text-amber-400 shadow-sm shadow-amber-500/5'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-300'
+                    }`}
+                  >
+                    <span className="font-mono text-[10px] font-bold opacity-60">
+                      {idx + 1}º
+                    </span>
+                    <strong className="text-xs font-semibold">{t.name}</strong>
+                    <span className="text-[10px] opacity-80 font-bold bg-slate-800 px-1.5 py-0.5 rounded text-white font-mono">
+                      {t.score} pts
+                    </span>
+                    {!isEliminated && t.correct + t.wrong > 0 && (
+                      <span className="text-[9px] text-slate-400">
+                        ({Math.round((t.correct / (t.correct + t.wrong)) * 100)}%)
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }
