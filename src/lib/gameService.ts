@@ -76,14 +76,30 @@ export async function updateGameState(updates: Partial<GameState>) {
 
 // 4. Subscribe to Teams
 export function subscribeToTeams(onUpdate: (teams: Team[]) => void) {
-  const q = query(collection(db, 'teams'), orderBy('score', 'desc'), orderBy('correct', 'desc'));
-  return onSnapshot(q, (snapshot) => {
-    const teams: Team[] = [];
-    snapshot.forEach((doc) => {
-      teams.push({ id: doc.id, ...doc.data() } as Team);
-    });
-    onUpdate(teams);
-  });
+  // NOTE: we intentionally do NOT use orderBy() with multiple fields here.
+  // A Firestore query with two orderBy() clauses on different fields requires a
+  // composite index; if that index doesn't exist in the project, onSnapshot()
+  // fails silently (no live updates at all — new teams only showed up after a
+  // manual refresh, once the local cache eventually got the data some other way).
+  // Sorting client-side avoids the index requirement entirely and keeps updates instant.
+  const q = query(collection(db, 'teams'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const teams: Team[] = [];
+      snapshot.forEach((doc) => {
+        teams.push({ id: doc.id, ...doc.data() } as Team);
+      });
+      teams.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return b.correct - a.correct;
+      });
+      onUpdate(teams);
+    },
+    (error) => {
+      console.error('Erro ao sincronizar equipas em tempo real:', error);
+    }
+  );
 }
 
 // 5. Subscribe to All Questions
