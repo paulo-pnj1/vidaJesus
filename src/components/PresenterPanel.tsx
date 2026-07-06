@@ -30,9 +30,8 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   // Setup Form State
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamMembers, setNewTeamMembers] = useState(4);
-  const [setupRounds, setSetupRounds] = useState(3);
+  const [setupTotalQuestions, setSetupTotalQuestions] = useState(10);
   const [setupTimerDuration, setSetupTimerDuration] = useState(30);
-  const [setupMode, setSetupMode] = useState<GameState['gameMode']>('sunday_school');
 
   // Game Play State
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
@@ -94,6 +93,22 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       alert('Adicione pelo menos 2 equipas para competir!');
       return;
     }
+
+    if (setupTotalQuestions % teams.length !== 0) {
+      alert(
+        `O número de perguntas (${setupTotalQuestions}) tem de ser divisível pelo número de equipas (${teams.length}), ` +
+        `para que todas respondam à mesma quantidade. Ex.: com 2 equipas, use um número par de perguntas.`
+      );
+      return;
+    }
+
+    const availableQuestions = questions.filter(q => !q.used).length;
+    if (setupTotalQuestions > availableQuestions) {
+      alert(`Só existem ${availableQuestions} perguntas disponíveis no banco. Reduza o número de perguntas ou adicione mais ao banco.`);
+      return;
+    }
+
+    const questionsPerTeam = setupTotalQuestions / teams.length;
     
     // Shuffle teams for the first turn order
     const shuffled = [...teams].sort(() => Math.random() - 0.5);
@@ -101,9 +116,9 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     await updateGameState({
       status: 'waiting',
       round: 1,
-      totalRounds: setupRounds,
+      totalRounds: questionsPerTeam,
       timerDuration: setupTimerDuration,
-      gameMode: setupMode,
+      gameMode: 'teams',
       currentTeamId: shuffled[0].id,
       currentQuestionId: null,
       revealed: false,
@@ -118,40 +133,23 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       .filter(a => a.roundNumber === gameState.round)
       .map(a => a.teamId);
 
-    const eligibleTeams = teams.filter(t => !answeredTeamIds.includes(t.id) && !gameState.eliminatedTeamIds?.includes(t.id));
+    const eligibleTeams = teams.filter(t => !answeredTeamIds.includes(t.id));
 
     if (eligibleTeams.length === 0) {
       // All teams have answered this round! Advance to next round or finish
       if (gameState.round >= gameState.totalRounds) {
         await updateGameState({ status: 'finished' });
       } else {
-        // Next round
+        // Next round — pick a team for the first turn
         const nextRound = gameState.round + 1;
-        
-        // If Competition mode, we eliminate the team with lowest score
-        let updatedEliminated = [...(gameState.eliminatedTeamIds || [])];
-        if (gameState.gameMode === 'competition') {
-          // Find lowest score among active teams
-          const activeTeams = teams.filter(t => !updatedEliminated.includes(t.id));
-          if (activeTeams.length > 2) {
-            const sortedByScore = [...activeTeams].sort((a, b) => a.score - b.score);
-            const lowestTeam = sortedByScore[0];
-            updatedEliminated.push(lowestTeam.id);
-            alert(`Fim da Rodada! A equipa "${lowestTeam.name}" foi eliminada.`);
-          }
-        }
-
-        // Pick a team for first turn of next round
-        const activeTeams = teams.filter(t => !updatedEliminated.includes(t.id));
-        const firstTeam = activeTeams[Math.floor(Math.random() * activeTeams.length)];
+        const firstTeam = teams[Math.floor(Math.random() * teams.length)];
 
         await updateGameState({
           round: nextRound,
           currentTeamId: firstTeam?.id || null,
           currentQuestionId: null,
           status: 'waiting',
-          revealed: false,
-          eliminatedTeamIds: updatedEliminated
+          revealed: false
         });
       }
       return;
@@ -352,64 +350,30 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
               <h3 className="text-lg font-bold text-slate-800 border-b pb-2 text-display">Configurações do Desafio</h3>
               
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1.5">Modo de Concurso</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSetupMode('sunday_school')}
-                      className={`p-3 rounded-xl border text-center text-xs font-semibold flex flex-col items-center gap-1 transition-all ${
-                        setupMode === 'sunday_school' 
-                          ? 'bg-amber-500/10 border-amber-500 text-amber-700 font-bold' 
-                          : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                      }`}
-                    >
-                      <Award className="w-4 h-4" />
-                      E. Dominical
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSetupMode('competition')}
-                      className={`p-3 rounded-xl border text-center text-xs font-semibold flex flex-col items-center gap-1 transition-all ${
-                        setupMode === 'competition' 
-                          ? 'bg-red-500/10 border-red-500 text-red-700 font-bold' 
-                          : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                      }`}
-                    >
-                      <X className="w-4 h-4" />
-                      Eliminação
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSetupMode('teams')}
-                      className={`p-3 rounded-xl border text-center text-xs font-semibold flex flex-col items-center gap-1 transition-all ${
-                        setupMode === 'teams' 
-                          ? 'bg-blue-500/10 border-blue-500 text-blue-700 font-bold' 
-                          : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                      }`}
-                    >
-                      <Users className="w-4 h-4" />
-                      Equipas Livres
-                    </button>
+                <div className="flex items-center gap-2 p-3 rounded-xl border border-blue-200 bg-blue-50/60 text-blue-700">
+                  <Users className="w-4 h-4 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold">Modo: Equipas Livres</p>
+                    <p className="text-[10px] text-blue-600/80">Sem eliminação — todas as equipas competem por pontos até ao fim.</p>
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1.5 italic">
-                    {setupMode === 'sunday_school' ? 'Ninguém é eliminado. Ideal para participação integrada até ao fim.' : 
-                     setupMode === 'competition' ? 'Eliminação progressiva da pior equipa ao final de cada rodada.' : 
-                     'Competição padrão de pontos livre por equipa.'}
-                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Total de Rodadas</label>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Número de Perguntas</label>
                     <input
                       type="number"
-                      value={setupRounds}
-                      onChange={(e) => setSetupRounds(Number(e.target.value))}
+                      value={setupTotalQuestions}
+                      onChange={(e) => setSetupTotalQuestions(Number(e.target.value))}
                       className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:bg-white focus:border-slate-400"
-                      min={1}
-                      max={10}
+                      min={teams.length || 2}
+                      step={teams.length || 2}
                     />
+                    <p className="text-[10px] text-slate-500 mt-1 italic">
+                      {teams.length >= 2
+                        ? `Tem de ser divisível por ${teams.length} (nº de equipas), para que todas respondam à mesma quantidade. Ex.: com 2 equipas, use um número par.`
+                        : 'Adicione as equipas para calcular a divisão de perguntas.'}
+                    </p>
                   </div>
 
                   <div>

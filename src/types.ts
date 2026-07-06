@@ -23,7 +23,7 @@ export interface Question {
 }
 
 export type GameStatus = 'setup' | 'waiting' | 'running' | 'showing_answer' | 'finished';
-export type GameMode = 'sunday_school' | 'competition' | 'teams';
+export type GameMode = 'teams';
 
 export interface GameState {
   id: string;

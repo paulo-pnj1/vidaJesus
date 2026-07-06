@@ -164,8 +164,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
             <div className="text-center">
               <span className="text-[10px] text-slate-400 uppercase font-black block">Modo</span>
               <strong className="text-xs uppercase px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-amber-400 font-mono">
-                {gameState.gameMode === 'sunday_school' ? 'E. Dominical' : 
-                 gameState.gameMode === 'competition' ? 'Competição' : 'Equipas'}
+                Equipas Livres
               </strong>
             </div>
           </div>
