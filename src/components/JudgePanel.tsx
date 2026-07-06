@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { GameState, Team } from '../types';
-import { subscribeToGameState, subscribeToTeams } from '../lib/gameService';
+import { GameState, Team, Answer } from '../types';
+import { subscribeToGameState, subscribeToTeams, subscribeToAnswers } from '../lib/gameService';
 import { Trophy, Scale } from 'lucide-react';
 
 export default function JudgePanel() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [answers, setAnswers] = useState<Answer[]>([]);
 
   useEffect(() => {
     const unsubscribeState = subscribeToGameState(setGameState);
     const unsubscribeTeams = subscribeToTeams(setTeams);
+    const unsubscribeAnswers = subscribeToAnswers(setAnswers);
     return () => {
       unsubscribeState();
       unsubscribeTeams();
+      unsubscribeAnswers();
     };
   }, []);
 
@@ -36,10 +39,21 @@ export default function JudgePanel() {
     return `${(t.totalAnswerTimeMs / total / 1000).toFixed(1)}s`;
   };
 
+  // Sum response time of CORRECT answers only, computed straight from the answer log
+  // (more reliable than the incremental team field, since it also covers answers
+  // recorded before that field existed).
+  const getCorrectAnswerTimeMs = (teamId: string) => {
+    return answers
+      .filter((a) => a.teamId === teamId && a.isCorrect)
+      .reduce((sum, a) => sum + (a.answerTimeMs || 0), 0);
+  };
+
+  const hasCorrectAnswers = (teamId: string) => answers.some((a) => a.teamId === teamId && a.isCorrect);
+
   // Total (sum) time spent on CORRECT answers only, formatted as m:ss when it reaches 60s+
   const formatTotalCorrectTime = (t: Team) => {
-    if (!t.correctAnswerTimeMs) return '—';
-    const totalSeconds = t.correctAnswerTimeMs / 1000;
+    if (!hasCorrectAnswers(t.id)) return '—';
+    const totalSeconds = getCorrectAnswerTimeMs(t.id) / 1000;
     if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = Math.round(totalSeconds % 60);
