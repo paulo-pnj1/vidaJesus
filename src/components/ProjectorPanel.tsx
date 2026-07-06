@@ -335,14 +335,22 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
                       isCorrectOption = activeQuestion.correctAnswer === originalIdx;
                     }
 
+                    // The option selected by the presenter/system as the team's answer
+                    const isSelectedOption = gameState.selectedOptionIndex === originalIdx;
+                    const isWrongSelectedOption = isRevealed && isSelectedOption && !isCorrectOption;
+
                     return (
                       <div 
                         key={idx} 
                         className={`p-5 rounded-2xl border-2 transition-all duration-300 flex items-center justify-between gap-4 shadow-sm ${
                           isRevealed && isCorrectOption
                             ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200 ring-4 ring-emerald-500/10'
+                            : isWrongSelectedOption
+                            ? 'border-rose-500 bg-rose-950/40 text-rose-200 ring-4 ring-rose-500/10'
                             : isRevealed && !isCorrectOption
                             ? 'border-slate-800 bg-slate-950/40 opacity-40 text-slate-500'
+                            : !isRevealed && isSelectedOption
+                            ? 'border-blue-500 bg-blue-950/30 text-blue-200'
                             : 'border-slate-800 bg-slate-900 text-slate-200'
                         }`}
                       >
@@ -350,6 +358,8 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
                           <span className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-display ${
                             isRevealed && isCorrectOption
                               ? 'bg-emerald-500 text-slate-950'
+                              : isWrongSelectedOption
+                              ? 'bg-rose-500 text-slate-950'
                               : 'bg-slate-800 text-slate-400'
                           }`}>
                             {activeQuestion.type === 'chronological' ? `${originalIdx + 1}º` : String.fromCharCode(65 + idx)}
@@ -359,6 +369,9 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
 
                         {isRevealed && isCorrectOption && (
                           <CheckCircle className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+                        )}
+                        {isWrongSelectedOption && (
+                          <XCircle className="w-6 h-6 text-rose-400 flex-shrink-0" />
                         )}
                       </div>
                     );

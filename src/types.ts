@@ -39,6 +39,7 @@ export interface GameState {
   currentMemberName?: string;
   eliminatedTeamIds?: string[]; // For competition mode
   shuffledOptions?: string[]; // Store shuffled options for the current question
+  selectedOptionIndex?: number | null; // Original (non-shuffled) index of the option chosen by the presenter/system as the team's answer
 }
 
 export interface Answer {

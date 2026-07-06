@@ -208,7 +208,15 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       timerEnd: now + durationMs,
       revealed: false,
       currentMemberName: memberName.trim() || 'Membro da Equipa',
-      shuffledOptions: shuffledOpts
+      shuffledOptions: shuffledOpts,
+      selectedOptionIndex: null
+    });
+  };
+
+  // Presenter/system selects which option the team answered (original, non-shuffled index)
+  const handleSelectOption = async (originalIdx: number) => {
+    await updateGameState({
+      selectedOptionIndex: originalIdx
     });
   };
 
@@ -250,7 +258,8 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       status: 'waiting',
       revealed: false,
       timerStart: null,
-      timerEnd: null
+      timerEnd: null,
+      selectedOptionIndex: null
     });
 
     setMemberName('');
@@ -677,6 +686,43 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     <h2 className="text-xl font-bold text-slate-800 text-display">{activeQuestion.question}</h2>
                     <p className="text-xs text-slate-500">Respondente: <strong>{gameState.currentMemberName}</strong> ({activeTeam?.name})</p>
                   </div>
+
+                  {/* Selection of the option the team answered - reflected live on the projector */}
+                  {activeQuestion.type !== 'chronological' && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <HelpIcon className="w-4 h-4 text-blue-500" />
+                        Qual opção a equipa escolheu?
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {(gameState.shuffledOptions || activeQuestion.options).map((opt, idx) => {
+                          const originalIdx = activeQuestion.options.indexOf(opt);
+                          const isSelected = gameState.selectedOptionIndex === originalIdx;
+                          const isCorrectOpt = activeQuestion.correctAnswer === originalIdx;
+                          const isRevealed = gameState.revealed;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleSelectOption(originalIdx)}
+                              className={`text-left px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                                isRevealed && isCorrectOpt
+                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                                  : isRevealed && isSelected && !isCorrectOpt
+                                  ? 'border-rose-500 bg-rose-50 text-rose-800'
+                                  : isSelected
+                                  ? 'border-blue-500 bg-blue-50 text-blue-800'
+                                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                              }`}
+                            >
+                              <span className="truncate">{String.fromCharCode(65 + idx)}) {opt}</span>
+                              {isSelected && <span className="text-[9px] uppercase font-bold flex-shrink-0">Escolhida</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Real-time Judge votes feed */}
                   <div className="space-y-2">
