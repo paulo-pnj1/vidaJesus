@@ -30,10 +30,20 @@ export default function JudgePanel() {
   const winner = ranked.length > 0 ? ranked[0] : null;
   const gameFinished = gameState?.status === 'finished';
 
-  const formatTime = (t: Team) => {
+  const formatAvgTime = (t: Team) => {
     const total = t.correct + t.wrong;
     if (!total || !t.totalAnswerTimeMs) return '—';
     return `${(t.totalAnswerTimeMs / total / 1000).toFixed(1)}s`;
+  };
+
+  // Total (sum) time spent on CORRECT answers only, formatted as m:ss when it reaches 60s+
+  const formatTotalCorrectTime = (t: Team) => {
+    if (!t.correctAnswerTimeMs) return '—';
+    const totalSeconds = t.correctAnswerTimeMs / 1000;
+    if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.round(totalSeconds % 60);
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
   };
 
   return (
@@ -49,7 +59,7 @@ export default function JudgePanel() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
+      <main className="flex-1 p-6 max-w-5xl mx-auto w-full">
         {ranked.length === 0 ? (
           <div className="text-center py-24 space-y-3">
             <div className="w-16 h-16 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center mx-auto">
@@ -71,13 +81,14 @@ export default function JudgePanel() {
             )}
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-              <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                <div className="col-span-1">#</div>
-                <div className="col-span-3">Grupo</div>
-                <div className="col-span-2 text-center">Acertos</div>
-                <div className="col-span-2 text-center">Erros</div>
-                <div className="col-span-2 text-center">Tempo de Acerto</div>
-                <div className="col-span-2 text-center">Aproveitamento</div>
+              <div className="grid grid-cols-[minmax(0,1fr)_repeat(6,minmax(0,2fr))] gap-2 px-5 py-3 bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                <div>#</div>
+                <div className="col-span-2">Grupo</div>
+                <div className="text-center">Acertos</div>
+                <div className="text-center">Erros</div>
+                <div className="text-center">Tempo Médio</div>
+                <div className="text-center">Total Tempo Acertos</div>
+                <div className="text-center">Aproveitamento</div>
               </div>
 
               {ranked.map((t, idx) => {
@@ -88,22 +99,23 @@ export default function JudgePanel() {
                 return (
                   <div
                     key={t.id}
-                    className={`grid grid-cols-12 gap-2 px-5 py-4 items-center border-b border-slate-800/60 last:border-b-0 ${
+                    className={`grid grid-cols-[minmax(0,1fr)_repeat(6,minmax(0,2fr))] gap-2 px-5 py-4 items-center border-b border-slate-800/60 last:border-b-0 ${
                       isEliminated ? 'opacity-40 line-through' :
                       isLeader ? 'bg-amber-400/5' : ''
                     }`}
                   >
-                    <div className="col-span-1 font-mono text-sm font-bold text-slate-500">
+                    <div className="font-mono text-sm font-bold text-slate-500">
                       {idx + 1}º
                     </div>
-                    <div className="col-span-3 flex items-center gap-2">
+                    <div className="col-span-2 flex items-center gap-2">
                       {isLeader && !isEliminated && <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />}
                       <span className="font-bold text-sm truncate">{t.name}</span>
                     </div>
-                    <div className="col-span-2 text-center font-mono text-sm text-emerald-400 font-bold">{t.correct}</div>
-                    <div className="col-span-2 text-center font-mono text-sm text-rose-400 font-bold">{t.wrong}</div>
-                    <div className="col-span-2 text-center font-mono text-xs text-slate-300">{formatTime(t)}</div>
-                    <div className="col-span-2 text-center">
+                    <div className="text-center font-mono text-sm text-emerald-400 font-bold">{t.correct}</div>
+                    <div className="text-center font-mono text-sm text-rose-400 font-bold">{t.wrong}</div>
+                    <div className="text-center font-mono text-xs text-slate-300">{formatAvgTime(t)}</div>
+                    <div className="text-center font-mono text-xs text-sky-300 font-bold">{formatTotalCorrectTime(t)}</div>
+                    <div className="text-center">
                       <span className="font-mono text-sm font-bold">{rate}%</span>
                     </div>
                   </div>

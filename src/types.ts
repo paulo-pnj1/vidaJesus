@@ -5,7 +5,8 @@ export interface Team {
   score: number;
   correct: number;
   wrong: number;
-  totalAnswerTimeMs?: number; // Sum of response times, used to compute the average "tempo de acerto"
+  totalAnswerTimeMs?: number; // Sum of ALL response times (correct + wrong), used to compute the average response time
+  correctAnswerTimeMs?: number; // Sum of response times ONLY for correct answers ("Tempo Total de Acertos")
   lastAnsweredAt?: any; // Timestamp
   membersAnswered?: string[]; // Names of members who have answered in the current rotation
 }

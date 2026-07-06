@@ -137,6 +137,7 @@ export async function addTeam(name: string, membersCount: number) {
     correct: 0,
     wrong: 0,
     totalAnswerTimeMs: 0,
+    correctAnswerTimeMs: 0,
     membersAnswered: []
   };
   await setDoc(teamRef, newTeam);
@@ -219,12 +220,14 @@ export async function submitAnswer(
     }
 
     const currentTotalTime = (team.totalAnswerTimeMs || 0) + (answerTimeMs || 0);
+    const currentCorrectTime = (team.correctAnswerTimeMs || 0) + (isCorrect ? (answerTimeMs || 0) : 0);
 
     await updateDoc(teamRef, {
       correct: currentCorrect,
       wrong: currentWrong,
       score: currentScore,
       totalAnswerTimeMs: currentTotalTime,
+      correctAnswerTimeMs: currentCorrectTime,
       lastAnsweredAt: Timestamp.now(),
       membersAnswered: updatedMembersAnswered
     });
@@ -244,6 +247,7 @@ export async function resetGame() {
       correct: 0,
       wrong: 0,
       totalAnswerTimeMs: 0,
+      correctAnswerTimeMs: 0,
       lastAnsweredAt: null,
       membersAnswered: []
     });
