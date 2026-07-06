@@ -1,0 +1,6 @@
+{
+  "name": "Desafio Bíblico - Vida de Jesus",
+  "description": "Plataforma de concurso bíblico em tempo real para eventos ao vivo e Escola Bíblica Dominical, com painéis sincronizados para apresentador, projetor público e jurados.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

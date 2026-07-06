@@ -1,0 +1,267 @@
+import { Question } from '../types';
+
+export const defaultQuestions: Question[] = [
+  {
+    id: "q_001",
+    lesson: "Nascimento de Jesus e Anunciação",
+    type: "multiple_choice",
+    question: "Qual o nome do anjo que anunciou a Maria que ela daria à luz a Jesus?",
+    options: ["Miguel", "Gabriel", "Rafael", "Uriel"],
+    correctAnswer: 1,
+    points: 10,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_002",
+    lesson: "Visita dos Reis Magos",
+    type: "multiple_choice",
+    question: "Quais foram os presentes trazidos pelos Magos do Oriente para o menino Jesus?",
+    options: ["Ouro, incenso e mirra", "Prata, trigo e azeite", "Ouro, perfumes e joias", "Incenso, bálsamo e vestes"],
+    correctAnswer: 0,
+    points: 10,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_003",
+    lesson: "Batismo de Jesus no Rio Jordão",
+    type: "who_am_i",
+    question: "Quem batizou Jesus no Rio Jordão e disse: 'Eis o Cordeiro de Deus, que tira o pecado do mundo'?",
+    options: ["Pedro", "João Batista", "Moisés", "Elias"],
+    correctAnswer: 1,
+    points: 15,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_004",
+    lesson: "Tentação no Deserto",
+    type: "true_false",
+    question: "Jesus foi tentado pelo diabo no deserto durante 30 dias e 30 noites.",
+    options: ["Verdadeiro (Sim)", "Falso (Não, foram 40 dias e noites)"],
+    correctAnswer: 1,
+    points: 15,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_005",
+    lesson: "O Primeiro Milagre: As Bodas de Caná",
+    type: "multiple_choice",
+    question: "Nas Bodas de Caná, Jesus transformou água em vinho. Quantas talhas de pedra estavam lá para a purificação?",
+    options: ["3 talhas de pedra", "6 talhas de pedra", "12 talhas de pedra", "7 talhas de pedra"],
+    correctAnswer: 1,
+    points: 20,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_006",
+    lesson: "Conversa com Nicodemos",
+    type: "incomplete_verse",
+    question: "Complete o versículo (João 3:16): 'Porque Deus amou o mundo de tal maneira que deu o seu Filho Unigénito, para que todo aquele que nele crê não ___ , mas tenha a vida eterna.'",
+    options: ["sofra", "morra", "pereça", "se canse"],
+    correctAnswer: 2,
+    points: 20,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_007",
+    lesson: "A Cura do Paralítico de Cafarnaum",
+    type: "multiple_choice",
+    question: "Como os amigos do paralítico de Cafarnaum o levaram até Jesus por causa da grande multidão?",
+    options: ["Abrindo caminho à força", "Pela janela dos fundos", "Descendo-o pelo telhado abrindo uma abertura", "Esperando até a noite no portão"],
+    correctAnswer: 2,
+    points: 15,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_008",
+    lesson: "A Tempestade Acalmada",
+    type: "true_false",
+    question: "Quando a tempestade assolou o barco dos discípulos, Jesus estava dormindo na popa sobre um travesseiro.",
+    options: ["Verdadeiro (Sim, na popa dormindo)", "Falso (Não, ele estava orando de pé)"],
+    correctAnswer: 0,
+    points: 15,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_009",
+    lesson: "A Multiplicação dos Pães e Peixes",
+    type: "multiple_choice",
+    question: "Quantos pães e peixes o rapaz tinha e que Jesus usou para alimentar a multidão de quase 5 mil homens?",
+    options: ["5 pães e 2 peixes", "7 pães e 3 peixes", "12 pães e 2 peixes", "3 pães e 5 peixes"],
+    correctAnswer: 0,
+    points: 10,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_010",
+    lesson: "A Ressurreição de Lázaro",
+    type: "who_am_i",
+    question: "Jesus ressuscitou Lázaro em Betânia. Quem eram as duas irmãs de Lázaro que choravam a sua morte?",
+    options: ["Maria e Marta", "Maria Madalena e Salomé", "Isabel e Ana", "Rute e Noemi"],
+    correctAnswer: 0,
+    points: 10,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_011",
+    lesson: "A Última Ceia",
+    type: "multiple_choice",
+    question: "Durante a Última Ceia, qual sinal Jesus usou para indicar quem O iria trair?",
+    options: ["Apontou diretamente com o dedo", "Molhou o pão no prato e deu a ele", "Sussurrou no ouvido de João", "Olhou fixamente nos seus olhos"],
+    correctAnswer: 1,
+    points: 20,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_012",
+    lesson: "O Julgamento e a Crucificação",
+    type: "chronological",
+    question: "Ordene os eventos da crucificação de Jesus na ordem cronológica correta (do primeiro ao último):",
+    options: [
+      "Pilatos lava as mãos diante da multidão",
+      "Jesus carrega a cruz a caminho do Gólgota",
+      "Jesus clama: 'Está consumado' e entrega o espírito",
+      "O véu do templo rasga-se de alto a baixo"
+    ],
+    correctAnswer: [0, 1, 2, 3], // The array reflects correct order index of items. 0 then 1 then 2 then 3.
+    points: 30,
+    difficulty: "hard",
+    used: false
+  },
+  {
+    id: "q_013",
+    lesson: "A Ressurreição",
+    type: "who_am_i",
+    question: "Quem foi a primeira pessoa a ver Jesus ressuscitado junto ao sepulcro e a quem Ele chamou pelo nome: 'Maria'?",
+    options: ["Maria, mãe de Jesus", "Maria Madalena", "Marta de Betânia", "Joana, mulher de Cuza"],
+    correctAnswer: 1,
+    points: 15,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_014",
+    lesson: "A Ascensão ao Céu",
+    type: "multiple_choice",
+    question: "De qual monte Jesus ascendeu aos céus diante dos Seus discípulos?",
+    options: ["Monte Sinai", "Monte das Oliveiras", "Monte Tabor", "Monte Calvário"],
+    correctAnswer: 1,
+    points: 20,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_015",
+    lesson: "O Sermão da Montanha",
+    type: "incomplete_verse",
+    question: "Complete a Bem-aventurança: 'Bem-aventurados os limpos de coração, porque eles ___ .'",
+    options: ["serão consolados", "herdarão a terra", "alcançarão misericórdia", "verão a Deus"],
+    correctAnswer: 3,
+    points: 15,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_016",
+    lesson: "Jesus Caminha Sobre as Águas",
+    type: "who_am_i",
+    question: "Qual apóstolo pediu para ir ao encontro de Jesus caminhando sobre a água, mas começou a afundar por ter tido medo?",
+    options: ["João", "Tiago", "Pedro", "André"],
+    correctAnswer: 2,
+    points: 10,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_017",
+    lesson: "A Entrada Triunfal em Jerusalém",
+    type: "multiple_choice",
+    question: "Em qual animal Jesus entrou montado em Jerusalém, cumprindo a profecia de Zacarias?",
+    options: ["Um cavalo branco", "Um jumentinho (colt)", "Um camelo", "Uma ovelha"],
+    correctAnswer: 1,
+    points: 10,
+    difficulty: "easy",
+    used: false
+  },
+  {
+    id: "q_018",
+    lesson: "Purificação do Templo",
+    type: "true_false",
+    question: "Ao expulsar os vendilhões do Templo, Jesus usou um chicote feito de cordas e derrubou as mesas dos cambistas.",
+    options: ["Verdadeiro (Sim, fez chicote de cordas)", "Falso (Não, ele apenas ordenou verbalmente)"],
+    correctAnswer: 0,
+    points: 15,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_019",
+    lesson: "Parábola do Semeador",
+    type: "multiple_choice",
+    question: "Na Parábola do Semeador, quais são os quatro tipos de terrenos descritos por Jesus?",
+    options: [
+      "Beira do caminho, pedregoso, espinhos e boa terra",
+      "Areia, lama, pedregoso e terra fértil",
+      "Beira do caminho, argila, espinhos e terra preta",
+      "Rocha, espinhos, relva e boa terra"
+    ],
+    correctAnswer: 0,
+    points: 15,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_020",
+    lesson: "A Agonia no Getsêmani",
+    type: "incomplete_verse",
+    question: "Complete as palavras de Jesus no Getsêmani: 'Meu Pai, se é possível, passe de mim este cálice; todavia, não seja como eu quero, mas ___ .'",
+    options: ["como Tu queres", "seja feita a Tua vontade", "conforme o planejado", "por Tua misericórdia"],
+    correctAnswer: 0,
+    points: 20,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_021",
+    lesson: "A Mulher Samaritana",
+    type: "true_false",
+    question: "Jesus encontrou-se com a mulher samaritana perto do poço de Abraão.",
+    options: ["Verdadeiro (Sim, o poço era de Abraão)", "Falso (Não, era o poço de Jacó)"],
+    correctAnswer: 1,
+    points: 15,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_022",
+    lesson: "A Transfiguração",
+    type: "multiple_choice",
+    question: "Quem foram os dois personagens do Antigo Testamento que apareceram gloriosos conversando com Jesus na Transfiguração?",
+    options: ["Moisés e Elias", "Abraão e Isaque", "Davi e Salomão", "Enoque e Noé"],
+    correctAnswer: 0,
+    points: 15,
+    difficulty: "medium",
+    used: false
+  },
+  {
+    id: "q_023",
+    lesson: "Apresentação no Templo",
+    type: "who_am_i",
+    question: "Quem era o homem justo e piedoso em Jerusalém que esperava a consolação de Israel, tomou o bebê Jesus nos braços e louvou a Deus?",
+    options: ["Zacarias", "Simeão", "Nicodemos", "José de Arimateia"],
+    correctAnswer: 1,
+    points: 20,
+    difficulty: "hard",
+    used: false
+  }
+];
