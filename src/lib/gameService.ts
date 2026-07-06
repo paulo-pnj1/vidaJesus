@@ -15,7 +15,7 @@ import {
   getDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Team, Question, GameState, Answer, GameStatus, GameMode, JudgeVote } from '../types';
+import { Team, Question, GameState, Answer, GameStatus, GameMode } from '../types';
 import { defaultQuestions } from '../data/defaultQuestions';
 
 const GAME_STATE_ID = 'current_game';
@@ -58,7 +58,9 @@ export function subscribeToGameState(onUpdate: (state: GameState | null) => void
         gameMode: 'sunday_school',
         revealed: false,
         eliminatedTeamIds: [],
-        shuffledOptions: []
+        shuffledOptions: [],
+        selectedOptionIndex: null,
+        chronologicalResult: null
       };
       setDoc(docRef, initialState);
       onUpdate(initialState);
@@ -107,37 +109,6 @@ export function subscribeToAnswers(onUpdate: (answers: Answer[]) => void) {
   });
 }
 
-// 7. Subscribe to Judge Votes for current round/question
-export function subscribeToJudgeVotes(onUpdate: (votes: JudgeVote[]) => void) {
-  return onSnapshot(collection(db, 'judge_votes'), (snapshot) => {
-    const votes: JudgeVote[] = [];
-    snapshot.forEach((doc) => {
-      votes.push({ judgeId: doc.id, ...doc.data() } as JudgeVote);
-    });
-    onUpdate(votes);
-  });
-}
-
-// 8. Submit Judge Vote
-export async function submitJudgeVote(judgeId: string, isCorrect: boolean) {
-  const docRef = doc(db, 'judge_votes', judgeId);
-  await setDoc(docRef, {
-    isCorrect,
-    timestamp: Timestamp.now()
-  });
-}
-
-// 9. Clear Judge Votes
-export async function clearJudgeVotes() {
-  const qCol = collection(db, 'judge_votes');
-  const snapshot = await getDocs(qCol);
-  const batch = writeBatch(db);
-  snapshot.forEach((doc) => {
-    batch.delete(doc.ref);
-  });
-  await batch.commit();
-}
-
 // 10. Add Team
 export async function addTeam(name: string, membersCount: number) {
   const id = `team_${Date.now()}`;
@@ -149,6 +120,7 @@ export async function addTeam(name: string, membersCount: number) {
     score: 0,
     correct: 0,
     wrong: 0,
+    totalAnswerTimeMs: 0,
     membersAnswered: []
   };
   await setDoc(teamRef, newTeam);
@@ -187,7 +159,8 @@ export async function submitAnswer(
   isCorrect: boolean,
   pointsEarned: number,
   roundNumber: number,
-  memberName?: string
+  memberName?: string,
+  answerTimeMs?: number
 ) {
   // Create Answer log entry
   const answerId = `ans_${Date.now()}`;
@@ -200,7 +173,8 @@ export async function submitAnswer(
     pointsEarned: isCorrect ? pointsEarned : 0,
     timestamp: Timestamp.now(),
     roundNumber,
-    memberName: memberName || 'Membro da Equipa'
+    memberName: memberName || 'Membro da Equipa',
+    answerTimeMs: answerTimeMs || 0
   };
   await setDoc(answerRef, answerData);
 
@@ -228,10 +202,13 @@ export async function submitAnswer(
       }
     }
 
+    const currentTotalTime = (team.totalAnswerTimeMs || 0) + (answerTimeMs || 0);
+
     await updateDoc(teamRef, {
       correct: currentCorrect,
       wrong: currentWrong,
       score: currentScore,
+      totalAnswerTimeMs: currentTotalTime,
       lastAnsweredAt: Timestamp.now(),
       membersAnswered: updatedMembersAnswered
     });
@@ -250,6 +227,7 @@ export async function resetGame() {
       score: 0,
       correct: 0,
       wrong: 0,
+      totalAnswerTimeMs: 0,
       lastAnsweredAt: null,
       membersAnswered: []
     });
@@ -269,14 +247,7 @@ export async function resetGame() {
     batch.delete(doc.ref);
   });
 
-  // 4. Clear judge votes
-  const votesCol = collection(db, 'judge_votes');
-  const votesSnap = await getDocs(votesCol);
-  votesSnap.forEach((doc) => {
-    batch.delete(doc.ref);
-  });
-
-  // 5. Reset Game State to setup
+  // 4. Reset Game State to setup
   const stateDoc = doc(db, 'game_state', GAME_STATE_ID);
   batch.set(stateDoc, {
     id: GAME_STATE_ID,
@@ -291,7 +262,9 @@ export async function resetGame() {
     gameMode: 'sunday_school',
     revealed: false,
     eliminatedTeamIds: [],
-    shuffledOptions: []
+    shuffledOptions: [],
+    selectedOptionIndex: null,
+    chronologicalResult: null
   });
 
   await batch.commit();

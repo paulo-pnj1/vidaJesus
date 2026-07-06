@@ -5,6 +5,7 @@ export interface Team {
   score: number;
   correct: number;
   wrong: number;
+  totalAnswerTimeMs?: number; // Sum of response times, used to compute the average "tempo de acerto"
   lastAnsweredAt?: any; // Timestamp
   membersAnswered?: string[]; // Names of members who have answered in the current rotation
 }
@@ -40,6 +41,7 @@ export interface GameState {
   eliminatedTeamIds?: string[]; // For competition mode
   shuffledOptions?: string[]; // Store shuffled options for the current question
   selectedOptionIndex?: number | null; // Original (non-shuffled) index of the option chosen by the presenter/system as the team's answer
+  chronologicalResult?: boolean | null; // For 'chronological' questions: whether the team's spoken order was correct
 }
 
 export interface Answer {
@@ -51,16 +53,5 @@ export interface Answer {
   timestamp: any; // Timestamp
   roundNumber: number;
   memberName?: string;
-}
-
-export interface JudgeDecision {
-  judgeId: string;
-  status: 'approved' | 'rejected';
-  timestamp: any;
-}
-
-export interface JudgeVote {
-  judgeId: string;
-  isCorrect: boolean;
-  timestamp: any;
+  answerTimeMs?: number; // How long the team took to answer, in milliseconds
 }

@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { GameState, Question, Team, Answer, JudgeVote } from '../types';
+import { GameState, Question, Team, Answer } from '../types';
 import { 
   updateGameState, 
   subscribeToTeams, 
   subscribeToQuestions, 
   subscribeToAnswers, 
-  subscribeToJudgeVotes,
-  clearJudgeVotes,
   addTeam, 
   deleteTeam, 
   submitAnswer, 
@@ -27,7 +25,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Answer[]>([]);
-  const [judgeVotes, setJudgeVotes] = useState<JudgeVote[]>([]);
   const [showDbAdmin, setShowDbAdmin] = useState(false);
 
   // Setup Form State
@@ -48,7 +45,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     const unsubscribeTeams = subscribeToTeams(setTeams);
     const unsubscribeQuestions = subscribeToQuestions(setQuestions);
     const unsubscribeAnswers = subscribeToAnswers(setAnswers);
-    const unsubscribeVotes = subscribeToJudgeVotes(setJudgeVotes);
 
     // Initial seeding check
     seedQuestionsIfEmpty();
@@ -57,7 +53,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       unsubscribeTeams();
       unsubscribeQuestions();
       unsubscribeAnswers();
-      unsubscribeVotes();
     };
   }, []);
 
@@ -199,8 +194,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     const now = Date.now();
     const durationMs = gameState.timerDuration * 1000;
 
-    await clearJudgeVotes();
-
     await updateGameState({
       currentQuestionId: selectedQuestionId,
       status: 'running',
@@ -209,7 +202,8 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       revealed: false,
       currentMemberName: memberName.trim() || 'Membro da Equipa',
       shuffledOptions: shuffledOpts,
-      selectedOptionIndex: null
+      selectedOptionIndex: null,
+      chronologicalResult: null
     });
   };
 
@@ -220,11 +214,11 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     });
   };
 
-  // Reveal Correct Answer
-  const handleRevealAnswer = async () => {
+  // For 'chronological' questions there is no option list — the presenter simply
+  // indicates whether the order the team gave out loud was correct or not.
+  const handleSelectChronological = async (isCorrectOrder: boolean) => {
     await updateGameState({
-      revealed: true,
-      status: 'showing_answer'
+      chronologicalResult: isCorrectOrder
     });
   };
 
@@ -236,35 +230,60 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     });
   };
 
-  // Handle Mark Correct/Incorrect
-  const handleJudgeDecision = async (isCorrect: boolean) => {
+  // Reveal the correct answer AND automatically grade + record it.
+  // Correctness is derived purely from what was selected above — no manual marking needed.
+  const handleRevealAnswer = async () => {
     if (!gameState.currentTeamId || !gameState.currentQuestionId) return;
     const question = questions.find(q => q.id === gameState.currentQuestionId);
     if (!question) return;
 
-    // Submit log & update scores
+    let isCorrect: boolean;
+    if (question.type === 'chronological') {
+      if (gameState.chronologicalResult === null || gameState.chronologicalResult === undefined) {
+        alert('Indique primeiro se a equipa acertou a ordem antes de revelar a resposta!');
+        return;
+      }
+      isCorrect = gameState.chronologicalResult;
+    } else {
+      if (gameState.selectedOptionIndex === null || gameState.selectedOptionIndex === undefined) {
+        alert('Selecione primeiro a opção que a equipa escolheu antes de revelar a resposta!');
+        return;
+      }
+      isCorrect = question.correctAnswer === gameState.selectedOptionIndex;
+    }
+
+    const answerTimeMs = gameState.timerStart ? Date.now() - gameState.timerStart : 0;
+
+    await updateGameState({
+      revealed: true,
+      status: 'showing_answer'
+    });
+
     await submitAnswer(
       gameState.currentTeamId,
       gameState.currentQuestionId,
       isCorrect,
       question.points,
       gameState.round,
-      gameState.currentMemberName
+      gameState.currentMemberName,
+      answerTimeMs
     );
+  };
 
-    // After answering, we can clear the current active question
+  // Move on to the next team/question after the answer has been revealed & scored
+  const handleContinue = async () => {
     await updateGameState({
       currentQuestionId: null,
       status: 'waiting',
       revealed: false,
       timerStart: null,
       timerEnd: null,
-      selectedOptionIndex: null
+      selectedOptionIndex: null,
+      chronologicalResult: null
     });
 
     setMemberName('');
     setSelectedQuestionId('');
-    await clearJudgeVotes();
   };
 
   // Reset/Re-evaluate entire competition
@@ -688,7 +707,38 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   </div>
 
                   {/* Selection of the option the team answered - reflected live on the projector */}
-                  {activeQuestion.type !== 'chronological' && (
+                  {activeQuestion.type === 'chronological' ? (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <HelpIcon className="w-4 h-4 text-blue-500" />
+                        A equipa acertou a ordem cronológica?
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectChronological(true)}
+                          className={`py-3 rounded-xl border text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                            gameState.chronologicalResult === true
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          }`}
+                        >
+                          <Check className="w-4 h-4" /> Ordem Correta
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectChronological(false)}
+                          className={`py-3 rounded-xl border text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                            gameState.chronologicalResult === false
+                              ? 'border-rose-500 bg-rose-50 text-rose-800'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          }`}
+                        >
+                          <X className="w-4 h-4" /> Ordem Errada
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                     <div className="space-y-2">
                       <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                         <HelpIcon className="w-4 h-4 text-blue-500" />
@@ -724,57 +774,40 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     </div>
                   )}
 
-                  {/* Real-time Judge votes feed */}
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                      <Users className="w-4 h-4 text-blue-500" />
-                      Avaliação dos Jurados ({judgeVotes.length})
-                    </h4>
-                    {judgeVotes.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-lg">Nenhum jurado enviou voto para esta pergunta ainda.</p>
+                  {/* Action row — grading is now fully automatic based on the selection above */}
+                  <div className="pt-4 border-t">
+                    {!gameState.revealed ? (
+                      <button
+                        onClick={handleRevealAnswer}
+                        className="w-full py-3.5 px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                      >
+                        <Eye className="w-4 h-4" />
+                        Mostrar Resposta (avalia e regista automaticamente)
+                      </button>
                     ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                        {judgeVotes.map((v, i) => (
-                          <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold border ${
-                            v.isCorrect 
-                              ? 'bg-emerald-50 border-emerald-100 text-emerald-800' 
-                              : 'bg-rose-50 border-rose-100 text-rose-800'
-                          }`}>
-                            <span className="truncate">{v.judgeId}</span>
-                            <span className="text-[10px] uppercase font-bold">
-                              {v.isCorrect ? 'CERTO ✔' : 'ERRADO ✖'}
-                            </span>
-                          </div>
-                        ))}
+                      <div className="space-y-3">
+                        <div className={`p-3 rounded-xl border text-center text-sm font-bold ${
+                          (activeQuestion.type === 'chronological'
+                            ? gameState.chronologicalResult
+                            : gameState.selectedOptionIndex === activeQuestion.correctAnswer)
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            : 'bg-rose-50 border-rose-200 text-rose-700'
+                        }`}>
+                          {(activeQuestion.type === 'chronological'
+                            ? gameState.chronologicalResult
+                            : gameState.selectedOptionIndex === activeQuestion.correctAnswer)
+                            ? 'Resposta CORRETA — pontos atribuídos automaticamente ✔'
+                            : 'Resposta INCORRETA — registada automaticamente ✖'}
+                        </div>
+                        <button
+                          onClick={handleContinue}
+                          className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                          Continuar / Próxima Pergunta
+                        </button>
                       </div>
                     )}
-                  </div>
-
-                  {/* Action row */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-4 border-t">
-                    <button
-                      onClick={handleRevealAnswer}
-                      className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Eye className="w-4 h-4" />
-                      Mostrar Resposta
-                    </button>
-
-                    <button
-                      onClick={() => handleJudgeDecision(true)}
-                      className="py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Check className="w-4 h-4" />
-                      Marcar Correta ✔
-                    </button>
-
-                    <button
-                      onClick={() => handleJudgeDecision(false)}
-                      className="py-3 px-4 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                      Marcar Incorreta ✖
-                    </button>
                   </div>
                 </div>
               )}
