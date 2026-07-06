@@ -4,25 +4,60 @@ import { subscribeToGameState } from './lib/gameService';
 import PresenterPanel from './components/PresenterPanel';
 import ProjectorPanel from './components/ProjectorPanel';
 import JudgePanel from './components/JudgePanel';
-import { Tv, Gamepad2, Scale, BookOpen, Sparkles, ArrowRight } from 'lucide-react';
+import { Tv, Gamepad2, Scale, BookOpen, Sparkles, ArrowRight, Lock, User, LogOut } from 'lucide-react';
+
+type Role = 'presenter' | 'projector' | 'judge';
+
+// Hardcoded access credentials for the protected panels.
+// Note: this is a simple front-end gate for a live event, not a real security boundary.
+const CREDENTIALS: Record<'presenter' | 'judge', { user: string; pass: string }> = {
+  presenter: { user: 'apr', pass: 'apr123' },
+  judge: { user: 'jur', pass: 'jur123' },
+};
+
+function isProtectedRole(r: Role): r is 'presenter' | 'judge' {
+  return r === 'presenter' || r === 'judge';
+}
+
+function authKey(r: 'presenter' | 'judge') {
+  return `bible_game_auth_${r}`;
+}
+
+function isAuthenticated(r: Role): boolean {
+  if (r === 'projector') return true;
+  return localStorage.getItem(authKey(r)) === 'true';
+}
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [role, setRole] = useState<'presenter' | 'projector' | 'judge' | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
+  // Role currently being logged into (shows the credentials form)
+  const [loginRole, setLoginRole] = useState<'presenter' | 'judge' | null>(null);
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   // Check URL hash or localStorage for persisted role
   useEffect(() => {
+    const applyRole = (r: Role) => {
+      if (isAuthenticated(r)) {
+        setRole(r);
+      } else if (isProtectedRole(r)) {
+        setLoginRole(r);
+      }
+    };
+
     const hash = window.location.hash.toLowerCase();
     if (hash === '#presenter') {
-      setRole('presenter');
+      applyRole('presenter');
     } else if (hash === '#projector') {
-      setRole('projector');
+      applyRole('projector');
     } else if (hash === '#judge') {
-      setRole('judge');
+      applyRole('judge');
     } else {
-      const savedRole = localStorage.getItem('bible_game_role') as 'presenter' | 'projector' | 'judge' | null;
+      const savedRole = localStorage.getItem('bible_game_role') as Role | null;
       if (savedRole && ['presenter', 'projector', 'judge'].includes(savedRole)) {
-        setRole(savedRole);
+        applyRole(savedRole);
       }
     }
 
@@ -30,11 +65,11 @@ export default function App() {
     const handleHashChange = () => {
       const currentHash = window.location.hash.toLowerCase();
       if (currentHash === '#presenter') {
-        setRole('presenter');
+        applyRole('presenter');
       } else if (currentHash === '#projector') {
-        setRole('projector');
+        applyRole('projector');
       } else if (currentHash === '#judge') {
-        setRole('judge');
+        applyRole('judge');
       }
     };
 
@@ -50,18 +85,123 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleSelectRole = (selectedRole: 'presenter' | 'projector' | 'judge') => {
+  const commitRole = (selectedRole: Role) => {
     setRole(selectedRole);
     localStorage.setItem('bible_game_role', selectedRole);
-    // Update hash so the URL is easily shareable/bookmarkable
     window.location.hash = selectedRole;
   };
 
+  const handleSelectRole = (selectedRole: Role) => {
+    if (isProtectedRole(selectedRole) && !isAuthenticated(selectedRole)) {
+      setLoginRole(selectedRole);
+      setLoginUser('');
+      setLoginPass('');
+      setLoginError(null);
+      return;
+    }
+    commitRole(selectedRole);
+  };
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginRole) return;
+    const expected = CREDENTIALS[loginRole];
+    if (loginUser.trim() === expected.user && loginPass === expected.pass) {
+      localStorage.setItem(authKey(loginRole), 'true');
+      commitRole(loginRole);
+      setLoginRole(null);
+      setLoginError(null);
+    } else {
+      setLoginError('Utilizador ou senha incorretos.');
+    }
+  };
+
   const handleClearRole = () => {
+    // Logging out of a protected panel revokes access, so credentials are required again next time.
+    if (role && isProtectedRole(role)) {
+      localStorage.removeItem(authKey(role));
+    }
     setRole(null);
+    setLoginRole(null);
     localStorage.removeItem('bible_game_role');
     window.location.hash = '';
   };
+
+  // Login Screen for protected panels (Presenter / Judge)
+  if (loginRole) {
+    const roleLabel = loginRole === 'presenter' ? 'Apresentador' : 'Banca de Jurados';
+    const isPresenter = loginRole === 'presenter';
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative font-sans overflow-hidden">
+        <div className={`absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full blur-[150px] pointer-events-none ${isPresenter ? 'bg-amber-500/10' : 'bg-emerald-500/10'}`}></div>
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 space-y-6 relative z-10">
+          <div className="text-center space-y-2">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-inner ${isPresenter ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+              <Lock className="w-8 h-8" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 text-display">Painel {roleLabel}</h2>
+            <p className="text-sm text-slate-500">Insira as credenciais de acesso para continuar.</p>
+          </div>
+
+          <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Utilizador</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                  <User className="w-4 h-4" />
+                </span>
+                <input
+                  type="text"
+                  value={loginUser}
+                  onChange={(e) => setLoginUser(e.target.value)}
+                  autoFocus
+                  className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:bg-white focus:border-slate-400 transition-all"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Senha</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type="password"
+                  value={loginPass}
+                  onChange={(e) => setLoginPass(e.target.value)}
+                  className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:bg-white focus:border-slate-400 transition-all"
+                  required
+                />
+              </div>
+            </div>
+
+            {loginError && (
+              <p className="text-xs text-rose-600 font-semibold bg-rose-50 border border-rose-100 rounded-lg p-2.5 text-center">
+                {loginError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all text-display"
+            >
+              Entrar
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setLoginRole(null)}
+              className="w-full text-xs text-slate-400 hover:text-slate-600 underline text-center"
+            >
+              Voltar à seleção de perfil
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   // Loading Screen
   if (!gameState) {
@@ -223,10 +363,14 @@ export default function App() {
           id="toggle-role-floating-btn"
           onClick={handleClearRole}
           className="fixed bottom-4 right-4 z-50 bg-slate-900/85 hover:bg-slate-900 text-slate-300 hover:text-white px-3.5 py-2 rounded-full text-xs font-semibold backdrop-blur-md border border-slate-700/50 shadow-lg flex items-center gap-1.5 transition-all duration-300 scale-90 hover:scale-100 cursor-pointer"
-          title="Alterar Painel / Perfil"
+          title={isProtectedRole(role) ? 'Sair e voltar à seleção de perfil' : 'Alterar Painel / Perfil'}
         >
-          <Gamepad2 className="w-3.5 h-3.5 text-amber-400" />
-          <span>Mudar Função</span>
+          {isProtectedRole(role) ? (
+            <LogOut className="w-3.5 h-3.5 text-amber-400" />
+          ) : (
+            <Gamepad2 className="w-3.5 h-3.5 text-amber-400" />
+          )}
+          <span>{isProtectedRole(role) ? 'Sair' : 'Mudar Função'}</span>
         </button>
       )}
     </>
