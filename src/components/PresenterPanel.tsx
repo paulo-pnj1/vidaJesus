@@ -12,7 +12,7 @@ import {
   seedQuestionsIfEmpty
 } from '../lib/gameService';
 import { 
-  Users, Play, RotateCcw, AlertTriangle, Plus, Trash2, Database, HelpCircle, 
+  Users, Play, RotateCcw, Plus, Trash2, Database, HelpCircle, 
   Check, X, Award, ChevronRight, Shuffle, Timer, Eye, HelpCircle as HelpIcon, ShieldAlert, BookOpen 
 } from 'lucide-react';
 import DatabaseAdmin from './DatabaseAdmin';
@@ -36,8 +36,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   // Game Play State
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
   const [filterLesson, setFilterLesson] = useState<string>('');
-  const [memberName, setMemberName] = useState<string>('');
-  const [showRotationWarning, setShowRotationWarning] = useState<string | null>(null);
 
   // Subscribe to collections
   useEffect(() => {
@@ -62,21 +60,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       setSelectedQuestionId(available[0].id);
     }
   }, [questions, filterLesson, selectedQuestionId]);
-
-  // Handle Respondent Name check against Rotation rule
-  const handleMemberNameChange = (val: string) => {
-    setMemberName(val);
-    if (!gameState.currentTeamId || !val.trim()) {
-      setShowRotationWarning(null);
-      return;
-    }
-    const currentTeam = teams.find(t => t.id === gameState.currentTeamId);
-    if (currentTeam && currentTeam.membersAnswered?.includes(val.trim())) {
-      setShowRotationWarning(`Aviso: "${val.trim()}" já respondeu nesta rodada de rotação. Todos devem responder antes de repetir!`);
-    } else {
-      setShowRotationWarning(null);
-    }
-  };
 
   // Add Team
   const handleAddTeam = async (e: React.FormEvent) => {
@@ -163,7 +146,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       status: 'waiting',
       revealed: false
     });
-    setMemberName('');
     setFilterLesson('');
     setSelectedQuestionId('');
   };
@@ -198,7 +180,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       timerStart: now,
       timerEnd: now + durationMs,
       revealed: false,
-      currentMemberName: memberName.trim() || 'Membro da Equipa',
       shuffledOptions: shuffledOpts,
       selectedOptionIndex: null,
       chronologicalResult: null
@@ -263,7 +244,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       isCorrect,
       question.points,
       gameState.round,
-      gameState.currentMemberName,
+      undefined,
       answerTimeMs
     );
   };
@@ -280,7 +261,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       chronologicalResult: null
     });
 
-    setMemberName('');
     setSelectedQuestionId('');
   };
 
@@ -525,31 +505,10 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                         Participação equilibrada: {activeTeam.membersAnswered?.length || 0} de {activeTeam.membersCount} responderam nesta rotação.
                       </p>
                     </div>
-
-                    {/* Respondent field */}
-                    {gameState.status === 'waiting' && (
-                      <div className="w-full md:w-[250px] space-y-1.5">
-                        <label className="block text-[11px] font-bold text-slate-300">Nome do Integrante que vai Responder</label>
-                        <input
-                          type="text"
-                          value={memberName}
-                          onChange={(e) => handleMemberNameChange(e.target.value)}
-                          placeholder="Ex: João Silva / Maria"
-                          className="w-full text-xs bg-slate-900 border border-slate-700 rounded-lg p-2.5 outline-none focus:border-amber-400 text-white"
-                        />
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-4 text-slate-400 text-xs">
                     Nenhuma equipa ativa no momento. Sorteie a próxima equipa acima.
-                  </div>
-                )}
-
-                {showRotationWarning && (
-                  <div className="flex items-center gap-2 text-amber-400 bg-amber-400/10 border border-amber-500/20 p-3 rounded-lg text-xs font-medium">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
-                    <span>{showRotationWarning}</span>
                   </div>
                 )}
               </div>
@@ -667,7 +626,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 text-center space-y-2">
                     <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Pergunta Ativa</p>
                     <h2 className="text-xl font-bold text-slate-800 text-display">{activeQuestion.question}</h2>
-                    <p className="text-xs text-slate-500">Respondente: <strong>{gameState.currentMemberName}</strong> ({activeTeam?.name})</p>
+                    <p className="text-xs text-slate-500">Equipa: <strong>{activeTeam?.name}</strong></p>
                   </div>
 
                   {/* Selection of the option the team answered - reflected live on the projector */}
@@ -840,7 +799,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 italic">"{q?.question || 'Pergunta'}"</p>
-                          <p className="text-[9px] text-slate-400">Respondido por: {ans.memberName} • Rodada {ans.roundNumber}</p>
+                          <p className="text-[9px] text-slate-400">Rodada {ans.roundNumber}</p>
                         </div>
                       );
                     })}
