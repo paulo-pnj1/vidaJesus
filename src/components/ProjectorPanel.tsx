@@ -49,6 +49,18 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
   }, []);
 
   const playResultSound = (isCorrect: boolean) => {
+    // Stop the main "pergunta lançada" music as soon as the result is known;
+    // it will only play again when the next question is launched.
+    try {
+      const mainAudio = questionLaunchSoundRef.current;
+      if (mainAudio) {
+        mainAudio.pause();
+        mainAudio.currentTime = 0;
+      }
+    } catch (e) {
+      // Ignored if browser blocks audio
+    }
+
     try {
       const audio = isCorrect ? correctSoundRef.current : wrongSoundRef.current;
       if (audio) {
