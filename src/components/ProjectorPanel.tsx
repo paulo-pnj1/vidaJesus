@@ -62,6 +62,37 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
     }
   };
 
+  // Audio played on the projector the moment a new question is launched
+  const questionLaunchSoundRef = useRef<HTMLAudioElement | null>(null);
+  const lastLaunchedQuestionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    questionLaunchSoundRef.current = new Audio('/audio/pergunta-lancada.mp3');
+    questionLaunchSoundRef.current.preload = 'auto';
+  }, []);
+
+  // Play it whenever a new question starts running (i.e. currentQuestionId changes while status is 'running')
+  useEffect(() => {
+    if (
+      gameState.status === 'running' &&
+      gameState.currentQuestionId &&
+      gameState.currentQuestionId !== lastLaunchedQuestionIdRef.current
+    ) {
+      lastLaunchedQuestionIdRef.current = gameState.currentQuestionId;
+      try {
+        const audio = questionLaunchSoundRef.current;
+        if (audio) {
+          audio.currentTime = 0;
+          audio.play().catch(() => {
+            // Autoplay blocked or file missing - silently ignore
+          });
+        }
+      } catch (e) {
+        // Ignored if browser blocks audio
+      }
+    }
+  }, [gameState.status, gameState.currentQuestionId]);
+
   // Subscribe to collections
   useEffect(() => {
     const unsubscribeTeams = subscribeToTeams(setTeams);
