@@ -37,6 +37,31 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
     }
   };
 
+  // Audio files for correct/wrong answer feedback, placed in /public/audio
+  const correctSoundRef = useRef<HTMLAudioElement | null>(null);
+  const wrongSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    correctSoundRef.current = new Audio('/audio/resposta-certa.mp3');
+    wrongSoundRef.current = new Audio('/audio/resposta-errada.mp3');
+    correctSoundRef.current.preload = 'auto';
+    wrongSoundRef.current.preload = 'auto';
+  }, []);
+
+  const playResultSound = (isCorrect: boolean) => {
+    try {
+      const audio = isCorrect ? correctSoundRef.current : wrongSoundRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {
+          // Autoplay blocked or file missing - silently ignore
+        });
+      }
+    } catch (e) {
+      // Ignored if browser blocks audio
+    }
+  };
+
   // Subscribe to collections
   useEffect(() => {
     const unsubscribeTeams = subscribeToTeams(setTeams);
@@ -85,16 +110,35 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
     };
   }, [gameState.timerStart, gameState.timerEnd, gameState.status]);
 
-  // Confetti triggering on answer reveal or finished state
+  // Sound + confetti triggering on answer reveal or finished state
   useEffect(() => {
     if (gameState.status === 'showing_answer' && gameState.revealed) {
-      // Small burst
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-      playBeep(523.25, 0.3); // C5 note for correct reveal
+      // The answers array is ordered by timestamp ascending, so the last
+      // entry is the one that was just submitted for this reveal.
+      const lastAnswer = answers[answers.length - 1];
+      const matchesCurrentReveal =
+        lastAnswer &&
+        lastAnswer.teamId === gameState.currentTeamId &&
+        lastAnswer.questionId === gameState.currentQuestionId;
+
+      if (matchesCurrentReveal) {
+        playResultSound(lastAnswer.isCorrect);
+        if (lastAnswer.isCorrect) {
+          confetti({
+            particleCount: 80,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+        }
+      } else {
+        // Fallback: correctness unknown, keep the old neutral beep + confetti
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+        playBeep(523.25, 0.3);
+      }
     } else if (gameState.status === 'finished') {
       // Massive continuous confetti
       const end = Date.now() + 5 * 1000;
@@ -117,7 +161,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
 
       return () => clearInterval(interval);
     }
-  }, [gameState.status, gameState.revealed]);
+  }, [gameState.status, gameState.revealed, answers, gameState.currentTeamId, gameState.currentQuestionId]);
 
   const activeQuestion = questions.find(q => q.id === gameState.currentQuestionId);
   const activeTeam = teams.find(t => t.id === gameState.currentTeamId);

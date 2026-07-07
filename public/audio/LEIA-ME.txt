@@ -1,0 +1,10 @@
+Coloca aqui os dois ficheiros de áudio com estes nomes exatos:
+
+- resposta-certa.mp3   -> toca quando a resposta da equipa é CERTA
+- resposta-errada.mp3  -> toca quando a resposta da equipa é ERRADA
+
+Podem ser .mp3 (recomendado) ou outro formato suportado pelo navegador (.wav, .ogg),
+mas nesse caso atualiza a extensão referenciada em src/components/ProjectorPanel.tsx
+(procura por "/audio/resposta-certa" e "/audio/resposta-errada").
+
+Depois de colocares os ficheiros aqui, corre "npm run build" e publica normalmente.
