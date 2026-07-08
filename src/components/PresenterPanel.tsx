@@ -33,10 +33,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const [setupTotalQuestions, setSetupTotalQuestions] = useState(10);
   const [setupTimerDuration, setSetupTimerDuration] = useState(30);
 
-  // Game Play State
-  const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
-  const [filterLesson, setFilterLesson] = useState<string>('');
-
   // Subscribe to collections
   useEffect(() => {
     const unsubscribeTeams = subscribeToTeams(setTeams);
@@ -52,14 +48,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       unsubscribeAnswers();
     };
   }, []);
-
-  // Set default selected question when category or list updates
-  useEffect(() => {
-    const available = questions.filter(q => !q.used && (!filterLesson || q.lesson === filterLesson));
-    if (available.length > 0 && !selectedQuestionId) {
-      setSelectedQuestionId(available[0].id);
-    }
-  }, [questions, filterLesson, selectedQuestionId]);
 
   // Add Team
   const handleAddTeam = async (e: React.FormEvent) => {
@@ -109,60 +97,22 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     });
   };
 
-  // Auto pick next team that has not answered in the current round
-  const handleDrawNextTeam = async () => {
-    // In current round, which teams have answered?
-    const answeredTeamIds = answers
-      .filter(a => a.roundNumber === gameState.round)
-      .map(a => a.teamId);
-
-    const eligibleTeams = teams.filter(t => !answeredTeamIds.includes(t.id));
-
-    if (eligibleTeams.length === 0) {
-      // All teams have answered this round! Advance to next round or finish
-      if (gameState.round >= gameState.totalRounds) {
-        await updateGameState({ status: 'finished' });
-      } else {
-        // Next round — pick a team for the first turn
-        const nextRound = gameState.round + 1;
-        const firstTeam = teams[Math.floor(Math.random() * teams.length)];
-
-        await updateGameState({
-          round: nextRound,
-          currentTeamId: firstTeam?.id || null,
-          currentQuestionId: null,
-          status: 'waiting',
-          revealed: false
-        });
-      }
-      return;
-    }
-
-    // Pick a random team from eligible
-    const nextTeam = eligibleTeams[Math.floor(Math.random() * eligibleTeams.length)];
-    await updateGameState({
-      currentTeamId: nextTeam.id,
-      currentQuestionId: null,
-      status: 'waiting',
-      revealed: false
-    });
-    setFilterLesson('');
-    setSelectedQuestionId('');
-  };
-
-  // Launch selected question to projector
+  // Launch a random unused question to the projector for the currently active team
   const handleLaunchQuestion = async () => {
-    if (!selectedQuestionId) {
-      alert('Selecione uma pergunta primeiro!');
-      return;
-    }
     if (!gameState.currentTeamId) {
-      alert('Selecione ou sorteie a equipa respondente!');
+      alert('Nenhuma equipa ativa para responder!');
       return;
     }
 
-    const question = questions.find(q => q.id === selectedQuestionId);
-    if (!question) return;
+    // Only questions never used before are eligible — this guarantees a question
+    // is never repeated, whether for the same team, a different team, or a later round.
+    const availableQuestions = questions.filter(q => !q.used);
+    if (availableQuestions.length === 0) {
+      alert('Não há mais perguntas disponíveis no banco!');
+      return;
+    }
+
+    const question = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
 
     // Shuffle options to keep it interactive for public
     let shuffledOpts = [...question.options];
@@ -175,7 +125,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     const durationMs = gameState.timerDuration * 1000;
 
     await updateGameState({
-      currentQuestionId: selectedQuestionId,
+      currentQuestionId: question.id,
       status: 'running',
       timerStart: now,
       timerEnd: now + durationMs,
@@ -249,19 +199,54 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     );
   };
 
-  // Move on to the next team/question after the answer has been revealed & scored
+  // Move on after the answer has been revealed & scored.
+  // Automatically advances the turn: picks the next team that hasn't answered yet in this
+  // round; once every team has answered, moves to the next round (or finishes the game).
   const handleContinue = async () => {
-    await updateGameState({
+    const justAnsweredTeamId = gameState.currentTeamId;
+
+    // Which teams have already answered in the current round? (include the team that just
+    // answered explicitly, in case the local `answers` list hasn't synced from Firestore yet)
+    const answeredTeamIds = new Set(
+      answers.filter(a => a.roundNumber === gameState.round).map(a => a.teamId)
+    );
+    if (justAnsweredTeamId) answeredTeamIds.add(justAnsweredTeamId);
+
+    const eligibleTeams = teams.filter(t => !answeredTeamIds.has(t.id));
+
+    const baseReset = {
       currentQuestionId: null,
-      status: 'waiting',
       revealed: false,
       timerStart: null,
       timerEnd: null,
       selectedOptionIndex: null,
       chronologicalResult: null
-    });
+    };
 
-    setSelectedQuestionId('');
+    if (eligibleTeams.length === 0) {
+      // Every team has had its turn this round
+      if (gameState.round >= gameState.totalRounds) {
+        await updateGameState({ ...baseReset, status: 'finished' });
+      } else {
+        const nextRound = gameState.round + 1;
+        const firstTeam = teams[Math.floor(Math.random() * teams.length)];
+        await updateGameState({
+          ...baseReset,
+          round: nextRound,
+          currentTeamId: firstTeam?.id || null,
+          status: 'waiting'
+        });
+      }
+      return;
+    }
+
+    // Randomly pick the next team still pending in this round
+    const nextTeam = eligibleTeams[Math.floor(Math.random() * eligibleTeams.length)];
+    await updateGameState({
+      ...baseReset,
+      currentTeamId: nextTeam.id,
+      status: 'waiting'
+    });
   };
 
   // Reset/Re-evaluate entire competition
@@ -270,11 +255,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       await resetGame();
     }
   };
-
-  // List lessons for filter
-  const lessonsWithUnusedQuestions = Array.from(new Set(
-    questions.filter(q => !q.used).map(q => q.lesson)
-  ));
 
   const activeQuestion = questions.find(q => q.id === gameState.currentQuestionId);
   const activeTeam = teams.find(t => t.id === gameState.currentTeamId);
@@ -480,17 +460,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                        gameState.status === 'showing_answer' ? 'Resposta Revelada' : 'Fim do Jogo'}
                     </span>
                   </div>
-
-                  {/* Draw next team / Turn advancer */}
-                  {gameState.status === 'waiting' && !gameState.currentQuestionId && (
-                    <button
-                      onClick={handleDrawNextTeam}
-                      className="flex items-center gap-1.5 text-xs bg-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded-lg hover:bg-amber-400 transition-all cursor-pointer"
-                    >
-                      <Shuffle className="w-3.5 h-3.5" />
-                      Sortear/Próxima Equipa
-                    </button>
-                  )}
                 </div>
 
                 {/* Active Team display */}
@@ -518,89 +487,22 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
                   <h3 className="text-lg font-bold text-slate-800 text-display border-b pb-2 flex items-center gap-2">
                     <BookOpen className="w-5 h-5 text-amber-500" />
-                    Selecione a Pergunta do Desafio
+                    Pergunta do Desafio
                   </h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">Filtrar Lição</label>
-                      <select
-                        value={filterLesson}
-                        onChange={(e) => { setFilterLesson(e.target.value); setSelectedQuestionId(''); }}
-                        className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:bg-white focus:border-slate-400"
-                      >
-                        <option value="">Todas as Lições com Perguntas Não Usadas</option>
-                        {lessonsWithUnusedQuestions.map(l => (
-                          <option key={l} value={l}>{l}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">Selecionar Pergunta</label>
-                      <select
-                        value={selectedQuestionId}
-                        onChange={(e) => setSelectedQuestionId(e.target.value)}
-                        className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:bg-white focus:border-slate-400"
-                      >
-                        {questions
-                          .filter(q => !q.used && (!filterLesson || q.lesson === filterLesson))
-                          .map(q => (
-                            <option key={q.id} value={q.id}>
-                              [{q.difficulty.toUpperCase()} - {q.points} pts] {q.question.substr(0, 50)}...
-                            </option>
-                          ))
-                        }
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Question preview inside Presenter panel */}
-                  {selectedQuestionId && (
-                    (() => {
-                      const q = questions.find(item => item.id === selectedQuestionId);
-                      if (!q) return null;
-                      return (
-                        <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-3">
-                          <div className="flex justify-between items-center text-xs text-slate-500 font-bold">
-                            <span className="uppercase">Dificuldade: {q.difficulty} • Pontos: {q.points}</span>
-                            <span className="uppercase">Tipo: {q.type}</span>
-                          </div>
-                          <p className="font-bold text-slate-800 text-display text-sm">{q.question}</p>
-                          
-                          <div className="grid grid-cols-2 gap-2 pt-1.5">
-                            {q.options.map((opt, oIdx) => {
-                              const isCorrect = q.type === 'true_false' 
-                                ? q.correctAnswer === oIdx 
-                                : q.type === 'chronological' 
-                                ? true 
-                                : q.correctAnswer === oIdx;
-                              return (
-                                <div key={oIdx} className={`text-xs p-2 rounded border flex items-center gap-1.5 ${
-                                  isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-800 font-semibold' : 'border-slate-100 bg-white text-slate-600'
-                                }`}>
-                                  <span className="font-bold opacity-60">{String.fromCharCode(65 + oIdx)})</span>
-                                  <span className="truncate">{opt}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          
-                          {q.type === 'chronological' && (
-                            <p className="text-[10px] text-slate-500 italic">As opções acima estão listadas no formato ordenado correto.</p>
-                          )}
-                        </div>
-                      );
-                    })()
-                  )}
+                  <p className="text-xs text-slate-500">
+                    A pergunta é sorteada automaticamente entre as que ainda não foram usadas —
+                    garantindo que nenhuma pergunta se repete, nem para a mesma equipa nem para outra.
+                    Restam <strong>{questions.filter(q => !q.used).length}</strong> pergunta(s) no banco.
+                  </p>
 
                   <button
                     onClick={handleLaunchQuestion}
-                    disabled={!selectedQuestionId}
+                    disabled={questions.filter(q => !q.used).length === 0}
                     className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                   >
-                    <ChevronRight className="w-5 h-5" />
-                    Lançar Pergunta ao Projetor & Iniciar
+                    <Shuffle className="w-5 h-5" />
+                    Sortear e Lançar Pergunta ao Projetor
                   </button>
                 </div>
               )}
@@ -727,7 +629,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                           className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                         >
                           <ChevronRight className="w-4 h-4" />
-                          Continuar / Próxima Pergunta
+                          Continuar / Passar à Próxima Equipa
                         </button>
                       </div>
                     )}
