@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GameState, Team, Answer, Question } from '../types';
 import { subscribeToGameState, subscribeToTeams, subscribeToAnswers, subscribeToQuestions, compareTeams } from '../lib/gameService';
-import { Trophy, Scale, ChevronDown, CheckCircle2, XCircle } from 'lucide-react';
+import { Trophy, Scale, HelpCircle, CheckCircle, Flame } from 'lucide-react';
 
 // Returns the human-readable text of a question's correct option(s), regardless of type.
 // - multiple_choice / true_false / who_am_i / incomplete_verse: correctAnswer is an index into options.
@@ -22,7 +22,6 @@ export default function JudgePanel() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [openRounds, setOpenRounds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const unsubscribeState = subscribeToGameState(setGameState);
@@ -37,43 +36,17 @@ export default function JudgePanel() {
     };
   }, []);
 
-  const teamsById = useMemo(() => {
-    const map = new Map<string, Team>();
-    teams.forEach((t) => map.set(t.id, t));
-    return map;
-  }, [teams]);
-
-  const questionsById = useMemo(() => {
-    const map = new Map<string, Question>();
-    questions.forEach((q) => map.set(q.id, q));
-    return map;
-  }, [questions]);
-
-  // Group answers by round, keeping only the first occurrence of each question per round
-  // (answers arrive already sorted by timestamp asc from subscribeToAnswers).
-  const roundsBreakdown = useMemo(() => {
-    const byRound = new Map<number, { questionId: string; answers: Answer[] }[]>();
-    answers.forEach((a) => {
-      const list = byRound.get(a.roundNumber) || [];
-      let entry = list.find((e) => e.questionId === a.questionId);
-      if (!entry) {
-        entry = { questionId: a.questionId, answers: [] };
-        list.push(entry);
-      }
-      entry.answers.push(a);
-      byRound.set(a.roundNumber, list);
-    });
-    return Array.from(byRound.entries()).sort((a, b) => a[0] - b[0]);
-  }, [answers]);
-
-  const toggleRound = (round: number) => {
-    setOpenRounds((prev) => {
-      const next = new Set(prev);
-      if (next.has(round)) next.delete(round);
-      else next.add(round);
-      return next;
-    });
-  };
+  // Pergunta e equipa atualmente em jogo — exatamente a mesma que está a ser
+  // mostrada no painel do projetor, mas aqui a resposta certa aparece já destacada.
+  const activeQuestion = useMemo(
+    () => questions.find((q) => q.id === gameState?.currentQuestionId) || null,
+    [questions, gameState?.currentQuestionId]
+  );
+  const activeTeam = useMemo(
+    () => teams.find((t) => t.id === gameState?.currentTeamId) || null,
+    [teams, gameState?.currentTeamId]
+  );
+  const showActiveQuestionStage = !!gameState && gameState.status !== 'setup' && gameState.status !== 'finished';
 
   // Ranking: ver compareTeams() em gameService.ts para a ordem de critérios/desempates
   const ranked = [...teams].sort(compareTeams);
@@ -121,7 +94,94 @@ export default function JudgePanel() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 max-w-6xl mx-auto w-full">
+      <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-6">
+
+        {/* PERGUNTA ATUAL — espelha o painel do projetor, com a resposta certa já destacada */}
+        {showActiveQuestionStage && (
+          <div className="space-y-4">
+            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider px-1 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Pergunta Atual (Ronda {gameState?.round} de {gameState?.totalRounds})
+            </h2>
+
+            {activeTeam && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl flex items-center justify-center font-black text-sm text-display flex-shrink-0">
+                  {activeTeam.name.substr(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-1">
+                    <Flame className="w-3 h-3 fill-current" /> Equipa a responder agora
+                  </span>
+                  <p className="text-sm font-bold text-white">
+                    {activeTeam.name}
+                    {gameState?.currentMemberName && (
+                      <span className="text-slate-400 font-normal"> — {gameState.currentMemberName}</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {activeQuestion ? (
+              <div className="space-y-4">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
+                  <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                    <span className="text-xs font-black uppercase tracking-widest text-blue-400 bg-blue-950/50 border border-blue-900/50 px-3 py-1 rounded-full">
+                      Lição: {activeQuestion.lesson}
+                    </span>
+                    <span className="text-xs font-bold text-amber-400 font-mono">
+                      VALE {activeQuestion.points} PONTOS
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-extrabold text-slate-100 text-display leading-tight">
+                    {activeQuestion.question}
+                  </h3>
+                </div>
+
+                {activeQuestion.type === 'chronological' ? (
+                  <div className="bg-emerald-950/30 border border-emerald-800 rounded-2xl p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 mb-2">Ordem Correta</p>
+                    <p className="text-base font-bold text-emerald-200">{getCorrectAnswerText(activeQuestion)}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {(gameState?.shuffledOptions || activeQuestion.options).map((opt, idx) => {
+                      const originalIdx = activeQuestion.options.indexOf(opt);
+                      const isCorrectOption = Number(activeQuestion.correctAnswer) === originalIdx;
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-4 rounded-xl border-2 flex items-center gap-3 ${
+                            isCorrectOption
+                              ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200'
+                              : 'border-slate-800 bg-slate-900 text-slate-300'
+                          }`}
+                        >
+                          <span
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs flex-shrink-0 ${
+                              isCorrectOption ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {String.fromCharCode(65 + idx)}
+                          </span>
+                          <span className="text-sm font-bold">{opt}</span>
+                          {isCorrectOption && <CheckCircle className="w-5 h-5 text-emerald-400 ml-auto flex-shrink-0" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-2">
+                <HelpCircle className="w-8 h-8 text-amber-500 mx-auto animate-pulse" />
+                <p className="text-sm text-slate-400">Aguardando a próxima pergunta ser lançada pelo apresentador...</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {ranked.length === 0 ? (
           <div className="text-center py-24 space-y-3">
             <div className="w-16 h-16 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center mx-auto">
@@ -195,78 +255,6 @@ export default function JudgePanel() {
                 ★ Classificação por Aproveitamento (%) • Desempate: Pontuação → Acertos → Menos Erros → Tempo Médio • Sincronizado automaticamente
               </span>
             </div>
-
-            {/* Respostas Certas por Ronda */}
-            {roundsBreakdown.length > 0 && (
-              <div className="space-y-2 pt-4">
-                <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider px-1">
-                  Respostas Certas por Ronda
-                </h2>
-                {roundsBreakdown.map(([round, entries]) => {
-                  const isOpen = openRounds.has(round);
-                  return (
-                    <div key={round} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                      <button
-                        onClick={() => toggleRound(round)}
-                        className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-800/50 transition-colors"
-                      >
-                        <span className="font-bold text-sm text-slate-200">Ronda {round}</span>
-                        <span className="flex items-center gap-2">
-                          <span className="text-[11px] text-slate-500 font-mono">
-                            {entries.length} pergunta{entries.length !== 1 ? 's' : ''}
-                          </span>
-                          <ChevronDown
-                            className={`w-4 h-4 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                          />
-                        </span>
-                      </button>
-
-                      {isOpen && (
-                        <div className="border-t border-slate-800 divide-y divide-slate-800/60">
-                          {entries.map(({ questionId, answers: qAnswers }, qIdx) => {
-                            const question = questionsById.get(questionId);
-                            if (!question) return null;
-                            return (
-                              <div key={questionId} className="px-5 py-4">
-                                <p className="text-[11px] text-slate-500 font-mono mb-1">
-                                  Pergunta {qIdx + 1} • {question.lesson} • {question.points} pts
-                                </p>
-                                <p className="text-sm text-slate-200 font-medium mb-2">{question.question}</p>
-                                <p className="text-sm text-emerald-400 font-bold mb-2">
-                                  ✓ {getCorrectAnswerText(question)}
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                  {qAnswers.map((a) => {
-                                    const team = teamsById.get(a.teamId);
-                                    return (
-                                      <span
-                                        key={a.id}
-                                        className={`inline-flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded-lg border ${
-                                          a.isCorrect
-                                            ? 'border-emerald-800 bg-emerald-500/10 text-emerald-300'
-                                            : 'border-rose-800 bg-rose-500/10 text-rose-300'
-                                        }`}
-                                      >
-                                        {a.isCorrect ? (
-                                          <CheckCircle2 className="w-3 h-3" />
-                                        ) : (
-                                          <XCircle className="w-3 h-3" />
-                                        )}
-                                        {team?.name || a.teamId}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
       </main>
