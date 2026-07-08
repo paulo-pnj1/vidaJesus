@@ -436,7 +436,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
                         }`}
                       >
                         <div className="flex items-center gap-4">
-                          <span className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-display ${
+                          <span translate="no" className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-display ${
                             isRevealed && isCorrectOption
                               ? 'bg-emerald-500 text-slate-950'
                               : isWrongSelectedOption

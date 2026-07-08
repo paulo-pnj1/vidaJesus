@@ -590,7 +590,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                               }`}
                             >
-                              <span className="truncate">{String.fromCharCode(65 + idx)}) {opt}</span>
+                              <span className="truncate"><span translate="no">{String.fromCharCode(65 + idx)}</span>) {opt}</span>
                               {isSelected && <span className="text-[9px] uppercase font-bold flex-shrink-0">Escolhida</span>}
                             </button>
                           );
