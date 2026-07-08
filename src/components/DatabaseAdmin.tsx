@@ -392,7 +392,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
                               <div key={oIdx} className={`text-xs px-2.5 py-1 rounded border flex items-center gap-1.5 ${
                                 isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-800 font-medium' : 'border-slate-100 bg-slate-50 text-slate-600'
                               }`}>
-                                <span translate="no" className="font-bold opacity-60">{String.fromCharCode(65 + oIdx)})</span>
+                                <span className="font-bold opacity-60">{String.fromCharCode(65 + oIdx)})</span>
                                 <span className="truncate">{opt}</span>
                               </div>
                             );
@@ -579,7 +579,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
                             title="Marcar como correta"
                           />
                         )}
-                        <span translate="no" className="text-sm font-bold text-slate-500 w-6">
+                        <span className="text-sm font-bold text-slate-500 w-6">
                           {type === 'chronological' ? `${oIdx + 1}º` : `${String.fromCharCode(65 + oIdx)})`}
                         </span>
                         <input

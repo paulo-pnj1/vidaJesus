@@ -19,14 +19,14 @@ export default function JudgePanel() {
     };
   }, []);
 
-  // Ranking: by score, then by % aproveitamento, then by number of correct answers
+  // Ranking: by % aproveitamento (acertos / total), then by score, then by number of correct answers
   const ranked = [...teams].sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
     const aTotal = a.correct + a.wrong;
     const bTotal = b.correct + b.wrong;
     const aRate = aTotal > 0 ? a.correct / aTotal : 0;
     const bRate = bTotal > 0 ? b.correct / bTotal : 0;
     if (bRate !== aRate) return bRate - aRate;
+    if (b.score !== a.score) return b.score - a.score;
     return b.correct - a.correct;
   });
 
@@ -90,6 +90,9 @@ export default function JudgePanel() {
                 <div>
                   <p className="text-xs uppercase font-bold tracking-wider text-amber-400">Grupo Vencedor</p>
                   <h2 className="text-2xl font-black text-display">{winner.name}</h2>
+                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                    Melhor aproveitamento: {winner.correct + winner.wrong > 0 ? Math.round((winner.correct / (winner.correct + winner.wrong)) * 100) : 0}%
+                  </p>
                 </div>
               </div>
             )}
@@ -98,11 +101,11 @@ export default function JudgePanel() {
               <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-400">
                 <div className="col-span-1">#</div>
                 <div className="col-span-3">Grupo</div>
+                <div className="col-span-2 text-center text-amber-400">Aproveit. ★</div>
                 <div className="col-span-1 text-center">Acertos</div>
                 <div className="col-span-1 text-center">Erros</div>
                 <div className="col-span-2 text-center">Tempo Médio</div>
                 <div className="col-span-2 text-center">Total Acertos</div>
-                <div className="col-span-2 text-center">Aproveit.</div>
               </div>
 
               {ranked.map((t, idx) => {
@@ -125,20 +128,24 @@ export default function JudgePanel() {
                       {isLeader && !isEliminated && <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />}
                       <span className="font-bold text-sm truncate">{t.name}</span>
                     </div>
+                    <div className="col-span-2 text-center">
+                      <span className={`font-mono text-base font-black ${isLeader && !isEliminated ? 'text-amber-400' : 'text-white'}`}>
+                        {rate}%
+                      </span>
+                    </div>
                     <div className="col-span-1 text-center font-mono text-sm text-emerald-400 font-bold">{t.correct}</div>
                     <div className="col-span-1 text-center font-mono text-sm text-rose-400 font-bold">{t.wrong}</div>
                     <div className="col-span-2 text-center font-mono text-xs text-slate-300">{formatAvgTime(t)}</div>
                     <div className="col-span-2 text-center font-mono text-xs text-sky-300 font-bold">{formatTotalCorrectTime(t)}</div>
-                    <div className="col-span-2 text-center">
-                      <span className="font-mono text-sm font-bold">{rate}%</span>
-                    </div>
                   </div>
                 );
               })}
             </div>
 
             <div className="text-center pt-2">
-              <span className="text-[10px] text-slate-500 font-mono">Pontuação total: score acumulado por respostas certas • Sincronizado automaticamente</span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                ★ Classificação por Aproveitamento (%) • Desempate: Pontuação, depois Acertos • Sincronizado automaticamente
+              </span>
             </div>
           </div>
         )}

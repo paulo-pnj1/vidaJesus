@@ -12,7 +12,7 @@ import {
   seedQuestionsIfEmpty
 } from '../lib/gameService';
 import { 
-  Users, Play, RotateCcw, Plus, Trash2, Database, HelpCircle, 
+  Users, Play, RotateCcw, AlertTriangle, Plus, Trash2, Database, HelpCircle, 
   Check, X, Award, ChevronRight, Shuffle, Timer, Eye, HelpCircle as HelpIcon, ShieldAlert, BookOpen 
 } from 'lucide-react';
 import DatabaseAdmin from './DatabaseAdmin';
@@ -33,6 +33,12 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const [setupTotalQuestions, setSetupTotalQuestions] = useState(10);
   const [setupTimerDuration, setSetupTimerDuration] = useState(30);
 
+  // Game Play State
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
+  const [filterLesson, setFilterLesson] = useState<string>('');
+  const [memberName, setMemberName] = useState<string>('');
+  const [showRotationWarning, setShowRotationWarning] = useState<string | null>(null);
+
   // Subscribe to collections
   useEffect(() => {
     const unsubscribeTeams = subscribeToTeams(setTeams);
@@ -48,6 +54,29 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       unsubscribeAnswers();
     };
   }, []);
+
+  // Set default selected question when category or list updates
+  useEffect(() => {
+    const available = questions.filter(q => !q.used && (!filterLesson || q.lesson === filterLesson));
+    if (available.length > 0 && !selectedQuestionId) {
+      setSelectedQuestionId(available[0].id);
+    }
+  }, [questions, filterLesson, selectedQuestionId]);
+
+  // Handle Respondent Name check against Rotation rule
+  const handleMemberNameChange = (val: string) => {
+    setMemberName(val);
+    if (!gameState.currentTeamId || !val.trim()) {
+      setShowRotationWarning(null);
+      return;
+    }
+    const currentTeam = teams.find(t => t.id === gameState.currentTeamId);
+    if (currentTeam && currentTeam.membersAnswered?.includes(val.trim())) {
+      setShowRotationWarning(`Aviso: "${val.trim()}" já respondeu nesta rodada de rotação. Todos devem responder antes de repetir!`);
+    } else {
+      setShowRotationWarning(null);
+    }
+  };
 
   // Add Team
   const handleAddTeam = async (e: React.FormEvent) => {
@@ -97,22 +126,61 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     });
   };
 
-  // Launch a random unused question to the projector for the currently active team
+  // Auto pick next team that has not answered in the current round
+  const handleDrawNextTeam = async () => {
+    // In current round, which teams have answered?
+    const answeredTeamIds = answers
+      .filter(a => a.roundNumber === gameState.round)
+      .map(a => a.teamId);
+
+    const eligibleTeams = teams.filter(t => !answeredTeamIds.includes(t.id));
+
+    if (eligibleTeams.length === 0) {
+      // All teams have answered this round! Advance to next round or finish
+      if (gameState.round >= gameState.totalRounds) {
+        await updateGameState({ status: 'finished' });
+      } else {
+        // Next round — pick a team for the first turn
+        const nextRound = gameState.round + 1;
+        const firstTeam = teams[Math.floor(Math.random() * teams.length)];
+
+        await updateGameState({
+          round: nextRound,
+          currentTeamId: firstTeam?.id || null,
+          currentQuestionId: null,
+          status: 'waiting',
+          revealed: false
+        });
+      }
+      return;
+    }
+
+    // Pick a random team from eligible
+    const nextTeam = eligibleTeams[Math.floor(Math.random() * eligibleTeams.length)];
+    await updateGameState({
+      currentTeamId: nextTeam.id,
+      currentQuestionId: null,
+      status: 'waiting',
+      revealed: false
+    });
+    setMemberName('');
+    setFilterLesson('');
+    setSelectedQuestionId('');
+  };
+
+  // Launch selected question to projector
   const handleLaunchQuestion = async () => {
+    if (!selectedQuestionId) {
+      alert('Selecione uma pergunta primeiro!');
+      return;
+    }
     if (!gameState.currentTeamId) {
-      alert('Nenhuma equipa ativa para responder!');
+      alert('Selecione ou sorteie a equipa respondente!');
       return;
     }
 
-    // Only questions never used before are eligible — this guarantees a question
-    // is never repeated, whether for the same team, a different team, or a later round.
-    const availableQuestions = questions.filter(q => !q.used);
-    if (availableQuestions.length === 0) {
-      alert('Não há mais perguntas disponíveis no banco!');
-      return;
-    }
-
-    const question = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+    const question = questions.find(q => q.id === selectedQuestionId);
+    if (!question) return;
 
     // Shuffle options to keep it interactive for public
     let shuffledOpts = [...question.options];
@@ -125,11 +193,12 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     const durationMs = gameState.timerDuration * 1000;
 
     await updateGameState({
-      currentQuestionId: question.id,
+      currentQuestionId: selectedQuestionId,
       status: 'running',
       timerStart: now,
       timerEnd: now + durationMs,
       revealed: false,
+      currentMemberName: memberName.trim() || 'Membro da Equipa',
       shuffledOptions: shuffledOpts,
       selectedOptionIndex: null,
       chronologicalResult: null
@@ -194,59 +263,25 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       isCorrect,
       question.points,
       gameState.round,
-      undefined,
+      gameState.currentMemberName,
       answerTimeMs
     );
   };
 
-  // Move on after the answer has been revealed & scored.
-  // Automatically advances the turn: picks the next team that hasn't answered yet in this
-  // round; once every team has answered, moves to the next round (or finishes the game).
+  // Move on to the next team/question after the answer has been revealed & scored
   const handleContinue = async () => {
-    const justAnsweredTeamId = gameState.currentTeamId;
-
-    // Which teams have already answered in the current round? (include the team that just
-    // answered explicitly, in case the local `answers` list hasn't synced from Firestore yet)
-    const answeredTeamIds = new Set(
-      answers.filter(a => a.roundNumber === gameState.round).map(a => a.teamId)
-    );
-    if (justAnsweredTeamId) answeredTeamIds.add(justAnsweredTeamId);
-
-    const eligibleTeams = teams.filter(t => !answeredTeamIds.has(t.id));
-
-    const baseReset = {
+    await updateGameState({
       currentQuestionId: null,
+      status: 'waiting',
       revealed: false,
       timerStart: null,
       timerEnd: null,
       selectedOptionIndex: null,
       chronologicalResult: null
-    };
-
-    if (eligibleTeams.length === 0) {
-      // Every team has had its turn this round
-      if (gameState.round >= gameState.totalRounds) {
-        await updateGameState({ ...baseReset, status: 'finished' });
-      } else {
-        const nextRound = gameState.round + 1;
-        const firstTeam = teams[Math.floor(Math.random() * teams.length)];
-        await updateGameState({
-          ...baseReset,
-          round: nextRound,
-          currentTeamId: firstTeam?.id || null,
-          status: 'waiting'
-        });
-      }
-      return;
-    }
-
-    // Randomly pick the next team still pending in this round
-    const nextTeam = eligibleTeams[Math.floor(Math.random() * eligibleTeams.length)];
-    await updateGameState({
-      ...baseReset,
-      currentTeamId: nextTeam.id,
-      status: 'waiting'
     });
+
+    setMemberName('');
+    setSelectedQuestionId('');
   };
 
   // Reset/Re-evaluate entire competition
@@ -255,6 +290,11 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       await resetGame();
     }
   };
+
+  // List lessons for filter
+  const lessonsWithUnusedQuestions = Array.from(new Set(
+    questions.filter(q => !q.used).map(q => q.lesson)
+  ));
 
   const activeQuestion = questions.find(q => q.id === gameState.currentQuestionId);
   const activeTeam = teams.find(t => t.id === gameState.currentTeamId);
@@ -460,6 +500,17 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                        gameState.status === 'showing_answer' ? 'Resposta Revelada' : 'Fim do Jogo'}
                     </span>
                   </div>
+
+                  {/* Draw next team / Turn advancer */}
+                  {gameState.status === 'waiting' && !gameState.currentQuestionId && (
+                    <button
+                      onClick={handleDrawNextTeam}
+                      className="flex items-center gap-1.5 text-xs bg-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded-lg hover:bg-amber-400 transition-all cursor-pointer"
+                    >
+                      <Shuffle className="w-3.5 h-3.5" />
+                      Sortear/Próxima Equipa
+                    </button>
+                  )}
                 </div>
 
                 {/* Active Team display */}
@@ -474,10 +525,31 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                         Participação equilibrada: {activeTeam.membersAnswered?.length || 0} de {activeTeam.membersCount} responderam nesta rotação.
                       </p>
                     </div>
+
+                    {/* Respondent field */}
+                    {gameState.status === 'waiting' && (
+                      <div className="w-full md:w-[250px] space-y-1.5">
+                        <label className="block text-[11px] font-bold text-slate-300">Nome do Integrante que vai Responder</label>
+                        <input
+                          type="text"
+                          value={memberName}
+                          onChange={(e) => handleMemberNameChange(e.target.value)}
+                          placeholder="Ex: João Silva / Maria"
+                          className="w-full text-xs bg-slate-900 border border-slate-700 rounded-lg p-2.5 outline-none focus:border-amber-400 text-white"
+                        />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-4 text-slate-400 text-xs">
                     Nenhuma equipa ativa no momento. Sorteie a próxima equipa acima.
+                  </div>
+                )}
+
+                {showRotationWarning && (
+                  <div className="flex items-center gap-2 text-amber-400 bg-amber-400/10 border border-amber-500/20 p-3 rounded-lg text-xs font-medium">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                    <span>{showRotationWarning}</span>
                   </div>
                 )}
               </div>
@@ -487,22 +559,89 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
                   <h3 className="text-lg font-bold text-slate-800 text-display border-b pb-2 flex items-center gap-2">
                     <BookOpen className="w-5 h-5 text-amber-500" />
-                    Pergunta do Desafio
+                    Selecione a Pergunta do Desafio
                   </h3>
 
-                  <p className="text-xs text-slate-500">
-                    A pergunta é sorteada automaticamente entre as que ainda não foram usadas —
-                    garantindo que nenhuma pergunta se repete, nem para a mesma equipa nem para outra.
-                    Restam <strong>{questions.filter(q => !q.used).length}</strong> pergunta(s) no banco.
-                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Filtrar Lição</label>
+                      <select
+                        value={filterLesson}
+                        onChange={(e) => { setFilterLesson(e.target.value); setSelectedQuestionId(''); }}
+                        className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:bg-white focus:border-slate-400"
+                      >
+                        <option value="">Todas as Lições com Perguntas Não Usadas</option>
+                        {lessonsWithUnusedQuestions.map(l => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Selecionar Pergunta</label>
+                      <select
+                        value={selectedQuestionId}
+                        onChange={(e) => setSelectedQuestionId(e.target.value)}
+                        className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:bg-white focus:border-slate-400"
+                      >
+                        {questions
+                          .filter(q => !q.used && (!filterLesson || q.lesson === filterLesson))
+                          .map(q => (
+                            <option key={q.id} value={q.id}>
+                              [{q.difficulty.toUpperCase()} - {q.points} pts] {q.question.substr(0, 50)}...
+                            </option>
+                          ))
+                        }
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Question preview inside Presenter panel */}
+                  {selectedQuestionId && (
+                    (() => {
+                      const q = questions.find(item => item.id === selectedQuestionId);
+                      if (!q) return null;
+                      return (
+                        <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-3">
+                          <div className="flex justify-between items-center text-xs text-slate-500 font-bold">
+                            <span className="uppercase">Dificuldade: {q.difficulty} • Pontos: {q.points}</span>
+                            <span className="uppercase">Tipo: {q.type}</span>
+                          </div>
+                          <p className="font-bold text-slate-800 text-display text-sm">{q.question}</p>
+                          
+                          <div className="grid grid-cols-2 gap-2 pt-1.5">
+                            {q.options.map((opt, oIdx) => {
+                              const isCorrect = q.type === 'true_false' 
+                                ? q.correctAnswer === oIdx 
+                                : q.type === 'chronological' 
+                                ? true 
+                                : q.correctAnswer === oIdx;
+                              return (
+                                <div key={oIdx} className={`text-xs p-2 rounded border flex items-center gap-1.5 ${
+                                  isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-800 font-semibold' : 'border-slate-100 bg-white text-slate-600'
+                                }`}>
+                                  <span className="font-bold opacity-60">{String.fromCharCode(65 + oIdx)})</span>
+                                  <span className="truncate">{opt}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          
+                          {q.type === 'chronological' && (
+                            <p className="text-[10px] text-slate-500 italic">As opções acima estão listadas no formato ordenado correto.</p>
+                          )}
+                        </div>
+                      );
+                    })()
+                  )}
 
                   <button
                     onClick={handleLaunchQuestion}
-                    disabled={questions.filter(q => !q.used).length === 0}
+                    disabled={!selectedQuestionId}
                     className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                   >
-                    <Shuffle className="w-5 h-5" />
-                    Sortear e Lançar Pergunta ao Projetor
+                    <ChevronRight className="w-5 h-5" />
+                    Lançar Pergunta ao Projetor & Iniciar
                   </button>
                 </div>
               )}
@@ -528,7 +667,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 text-center space-y-2">
                     <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Pergunta Ativa</p>
                     <h2 className="text-xl font-bold text-slate-800 text-display">{activeQuestion.question}</h2>
-                    <p className="text-xs text-slate-500">Equipa: <strong>{activeTeam?.name}</strong></p>
+                    <p className="text-xs text-slate-500">Respondente: <strong>{gameState.currentMemberName}</strong> ({activeTeam?.name})</p>
                   </div>
 
                   {/* Selection of the option the team answered - reflected live on the projector */}
@@ -590,7 +729,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                               }`}
                             >
-                              <span className="truncate"><span translate="no">{String.fromCharCode(65 + idx)}</span>) {opt}</span>
+                              <span className="truncate">{String.fromCharCode(65 + idx)}) {opt}</span>
                               {isSelected && <span className="text-[9px] uppercase font-bold flex-shrink-0">Escolhida</span>}
                             </button>
                           );
@@ -629,7 +768,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                           className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                         >
                           <ChevronRight className="w-4 h-4" />
-                          Continuar / Passar à Próxima Equipa
+                          Continuar / Próxima Pergunta
                         </button>
                       </div>
                     )}
@@ -701,7 +840,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 italic">"{q?.question || 'Pergunta'}"</p>
-                          <p className="text-[9px] text-slate-400">Rodada {ans.roundNumber}</p>
+                          <p className="text-[9px] text-slate-400">Respondido por: {ans.memberName} • Rodada {ans.roundNumber}</p>
                         </div>
                       );
                     })}

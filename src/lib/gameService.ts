@@ -91,7 +91,15 @@ export function subscribeToTeams(onUpdate: (teams: Team[]) => void) {
         teams.push({ id: doc.id, ...doc.data() } as Team);
       });
       teams.sort((a, b) => {
+        // Ranking principal: % de aproveitamento (acertos / total de respostas)
+        const aTotal = a.correct + a.wrong;
+        const bTotal = b.correct + b.wrong;
+        const aRate = aTotal > 0 ? a.correct / aTotal : 0;
+        const bRate = bTotal > 0 ? b.correct / bTotal : 0;
+        if (bRate !== aRate) return bRate - aRate;
+        // Desempate: pontuação
         if (b.score !== a.score) return b.score - a.score;
+        // Desempate final: número de respostas certas
         return b.correct - a.correct;
       });
       onUpdate(teams);
