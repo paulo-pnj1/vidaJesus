@@ -1,23 +1,79 @@
-import React, { useState, useEffect } from 'react';
-import { GameState, Team, Answer } from '../types';
-import { subscribeToGameState, subscribeToTeams, subscribeToAnswers, compareTeams } from '../lib/gameService';
-import { Trophy, Scale } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { GameState, Team, Answer, Question } from '../types';
+import { subscribeToGameState, subscribeToTeams, subscribeToAnswers, subscribeToQuestions, compareTeams } from '../lib/gameService';
+import { Trophy, Scale, ChevronDown, CheckCircle2, XCircle } from 'lucide-react';
+
+// Returns the human-readable text of a question's correct option(s), regardless of type.
+// - multiple_choice / true_false / who_am_i / incomplete_verse: correctAnswer is an index into options.
+// - chronological: correctAnswer is an array of indexes representing the correct order.
+function getCorrectAnswerText(q: Question): string {
+  if (q.type === 'chronological' && Array.isArray(q.correctAnswer)) {
+    return q.correctAnswer
+      .map((idx: number) => q.options[idx])
+      .filter(Boolean)
+      .join('  →  ');
+  }
+  const idx = Number(q.correctAnswer);
+  return q.options?.[idx] ?? '—';
+}
 
 export default function JudgePanel() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [answers, setAnswers] = useState<Answer[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [openRounds, setOpenRounds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const unsubscribeState = subscribeToGameState(setGameState);
     const unsubscribeTeams = subscribeToTeams(setTeams);
     const unsubscribeAnswers = subscribeToAnswers(setAnswers);
+    const unsubscribeQuestions = subscribeToQuestions(setQuestions);
     return () => {
       unsubscribeState();
       unsubscribeTeams();
       unsubscribeAnswers();
+      unsubscribeQuestions();
     };
   }, []);
+
+  const teamsById = useMemo(() => {
+    const map = new Map<string, Team>();
+    teams.forEach((t) => map.set(t.id, t));
+    return map;
+  }, [teams]);
+
+  const questionsById = useMemo(() => {
+    const map = new Map<string, Question>();
+    questions.forEach((q) => map.set(q.id, q));
+    return map;
+  }, [questions]);
+
+  // Group answers by round, keeping only the first occurrence of each question per round
+  // (answers arrive already sorted by timestamp asc from subscribeToAnswers).
+  const roundsBreakdown = useMemo(() => {
+    const byRound = new Map<number, { questionId: string; answers: Answer[] }[]>();
+    answers.forEach((a) => {
+      const list = byRound.get(a.roundNumber) || [];
+      let entry = list.find((e) => e.questionId === a.questionId);
+      if (!entry) {
+        entry = { questionId: a.questionId, answers: [] };
+        list.push(entry);
+      }
+      entry.answers.push(a);
+      byRound.set(a.roundNumber, list);
+    });
+    return Array.from(byRound.entries()).sort((a, b) => a[0] - b[0]);
+  }, [answers]);
+
+  const toggleRound = (round: number) => {
+    setOpenRounds((prev) => {
+      const next = new Set(prev);
+      if (next.has(round)) next.delete(round);
+      else next.add(round);
+      return next;
+    });
+  };
 
   // Ranking: ver compareTeams() em gameService.ts para a ordem de critérios/desempates
   const ranked = [...teams].sort(compareTeams);
@@ -139,6 +195,78 @@ export default function JudgePanel() {
                 ★ Classificação por Aproveitamento (%) • Desempate: Pontuação → Acertos → Menos Erros → Tempo Médio • Sincronizado automaticamente
               </span>
             </div>
+
+            {/* Respostas Certas por Ronda */}
+            {roundsBreakdown.length > 0 && (
+              <div className="space-y-2 pt-4">
+                <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider px-1">
+                  Respostas Certas por Ronda
+                </h2>
+                {roundsBreakdown.map(([round, entries]) => {
+                  const isOpen = openRounds.has(round);
+                  return (
+                    <div key={round} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                      <button
+                        onClick={() => toggleRound(round)}
+                        className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-800/50 transition-colors"
+                      >
+                        <span className="font-bold text-sm text-slate-200">Ronda {round}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            {entries.length} pergunta{entries.length !== 1 ? 's' : ''}
+                          </span>
+                          <ChevronDown
+                            className={`w-4 h-4 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                          />
+                        </span>
+                      </button>
+
+                      {isOpen && (
+                        <div className="border-t border-slate-800 divide-y divide-slate-800/60">
+                          {entries.map(({ questionId, answers: qAnswers }, qIdx) => {
+                            const question = questionsById.get(questionId);
+                            if (!question) return null;
+                            return (
+                              <div key={questionId} className="px-5 py-4">
+                                <p className="text-[11px] text-slate-500 font-mono mb-1">
+                                  Pergunta {qIdx + 1} • {question.lesson} • {question.points} pts
+                                </p>
+                                <p className="text-sm text-slate-200 font-medium mb-2">{question.question}</p>
+                                <p className="text-sm text-emerald-400 font-bold mb-2">
+                                  ✓ {getCorrectAnswerText(question)}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {qAnswers.map((a) => {
+                                    const team = teamsById.get(a.teamId);
+                                    return (
+                                      <span
+                                        key={a.id}
+                                        className={`inline-flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded-lg border ${
+                                          a.isCorrect
+                                            ? 'border-emerald-800 bg-emerald-500/10 text-emerald-300'
+                                            : 'border-rose-800 bg-rose-500/10 text-rose-300'
+                                        }`}
+                                      >
+                                        {a.isCorrect ? (
+                                          <CheckCircle2 className="w-3 h-3" />
+                                        ) : (
+                                          <XCircle className="w-3 h-3" />
+                                        )}
+                                        {team?.name || a.teamId}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </main>
