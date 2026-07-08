@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, Question, Team, Answer } from '../types';
-import { subscribeToTeams, subscribeToQuestions, subscribeToAnswers } from '../lib/gameService';
-import { Award, Timer, Trophy, CheckCircle, XCircle, Star, Users, HelpCircle, ArrowUpRight, Flame } from 'lucide-react';
+import { subscribeToTeams, subscribeToQuestions, subscribeToAnswers, compareTeams } from '../lib/gameService';
+import { Award, Timer, Trophy, CheckCircle, XCircle, Users, HelpCircle, ArrowUpRight, Flame } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface ProjectorPanelProps {
@@ -210,18 +210,10 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
   const activeTeam = teams.find(t => t.id === gameState.currentTeamId);
 
   // Calculate winner team for finished screen
-  // Critério principal: % de aproveitamento (acertos / total de respostas)
+  // Ver compareTeams() em gameService.ts para a ordem de critérios/desempates
   const getWinner = (): Team | null => {
     if (teams.length === 0) return null;
-    const sorted = [...teams].sort((a, b) => {
-      const aTotal = a.correct + a.wrong;
-      const bTotal = b.correct + b.wrong;
-      const aRate = aTotal > 0 ? a.correct / aTotal : 0;
-      const bRate = bTotal > 0 ? b.correct / bTotal : 0;
-      if (bRate !== aRate) return bRate - aRate;
-      if (b.score !== a.score) return b.score - a.score;
-      return b.correct - a.correct;
-    });
+    const sorted = [...teams].sort(compareTeams);
     return sorted[0];
   };
 
@@ -313,28 +305,6 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
               <p className="text-sm text-slate-400">
                 Parabéns à equipa vencedora pelo excelente aproveitamento no estudo da Vida de Jesus!
               </p>
-            </div>
-
-            {/* Winner Stats Grid */}
-            <div className="grid grid-cols-4 gap-4 max-w-2xl mx-auto pt-6">
-              <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Pontos Totais</span>
-                <strong className="text-xl font-bold text-amber-400">{winner.score} pts</strong>
-              </div>
-              <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Respostas Certas</span>
-                <strong className="text-xl font-bold text-emerald-400">{winner.correct}</strong>
-              </div>
-              <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Respostas Erradas</span>
-                <strong className="text-xl font-bold text-rose-400">{winner.wrong}</strong>
-              </div>
-              <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">Aproveitamento</span>
-                <strong className="text-xl font-bold text-blue-400">
-                  {winner.correct + winner.wrong > 0 ? Math.round((winner.correct / (winner.correct + winner.wrong)) * 100) : 0}%
-                </strong>
-              </div>
             </div>
           </div>
         )}
@@ -490,55 +460,6 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
           </div>
         )}
       </main>
-
-      {/* FOOTER / REAL-TIME LEADERBOARD TICKER */}
-      {gameState.status !== 'setup' && (
-        <footer className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-md p-4 rounded-2xl z-10 space-y-2">
-          <div className="flex justify-between items-center border-b border-slate-800/80 pb-2">
-            <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1.5">
-              <Star className="w-3.5 h-3.5 text-amber-400 fill-current" /> Tabela de Classificação em Tempo Real
-            </span>
-            <span className="text-[10px] text-slate-500 font-mono">Sincronizado automaticamente</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 justify-between">
-            <div className="flex flex-wrap gap-3">
-              {teams.map((t, idx) => {
-                const isEliminated = gameState.eliminatedTeamIds?.includes(t.id);
-                const isActive = gameState.currentTeamId === t.id;
-                return (
-                  <div 
-                    key={t.id} 
-                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border transition-all ${
-                      isEliminated ? 'bg-slate-950 border-slate-900 text-slate-600 opacity-40 line-through' :
-                      isActive 
-                        ? 'bg-amber-400/10 border-amber-500/30 text-amber-400 shadow-sm shadow-amber-500/5' 
-                        : 'bg-slate-950/60 border-slate-800 text-slate-300'
-                    }`}
-                  >
-                    <span className="font-mono text-[10px] font-bold opacity-60">
-                      {idx + 1}º
-                    </span>
-                    <strong className="text-xs font-semibold">{t.name}</strong>
-                    <span className="text-[10px] opacity-80 font-bold bg-slate-800 px-1.5 py-0.5 rounded text-white font-mono">
-                      {t.score} pts
-                    </span>
-                    {!isEliminated && t.correct + t.wrong > 0 && (
-                      <span className="text-[9px] text-slate-400">
-                        ({Math.round((t.correct / (t.correct + t.wrong)) * 100)}%)
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="text-[10px] text-slate-500 italic hidden md:block">
-              * Critérios de desempate: 1. Aproveitamento % | 2. Pontuação | 3. Respostas Certas
-            </div>
-          </div>
-        </footer>
-      )}
 
     </div>
   );

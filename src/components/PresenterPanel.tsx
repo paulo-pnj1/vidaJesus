@@ -13,7 +13,7 @@ import {
 } from '../lib/gameService';
 import { 
   Users, Play, RotateCcw, AlertTriangle, Plus, Trash2, Database, HelpCircle, 
-  Check, X, Award, ChevronRight, Shuffle, Timer, Eye, HelpCircle as HelpIcon, ShieldAlert, BookOpen 
+  Check, X, ChevronRight, Shuffle, Timer, Eye, HelpCircle as HelpIcon, ShieldAlert, BookOpen 
 } from 'lucide-react';
 import DatabaseAdmin from './DatabaseAdmin';
 
@@ -480,8 +480,8 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
         ) : (
           /* LIVE GAME SCREEN */
           <>
-            {/* Left/Middle Column (Presenter Live Controls) */}
-            <div className="lg:col-span-8 space-y-6">
+            {/* Presenter Live Controls (full width — classification/stats live only in the Judge Panel) */}
+            <div className="col-span-12 space-y-6">
               
               {/* Active Step status banner */}
               <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-sm space-y-4">
@@ -775,78 +775,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   </div>
                 </div>
               )}
-
-            </div>
-
-            {/* Right Column (Leaderboard & History) */}
-            <div className="lg:col-span-4 space-y-6">
-              
-              {/* Leaderboard */}
-              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-                <h3 className="text-base font-bold text-slate-800 text-display border-b pb-2 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-amber-500" />
-                  Classificação Geral (Real-time)
-                </h3>
-
-                <div className="space-y-2">
-                  {teams.map((t, idx) => {
-                    const isEliminated = gameState.eliminatedTeamIds?.includes(t.id);
-                    return (
-                      <div key={t.id} className={`flex justify-between items-center p-3 rounded-xl border ${
-                        isEliminated ? 'border-slate-200 bg-slate-100/60 opacity-60 text-slate-400' :
-                        gameState.currentTeamId === t.id ? 'border-amber-400 bg-amber-50/50 text-slate-800 font-medium shadow-xs' : 'border-slate-100 bg-slate-50/50 text-slate-700'
-                      }`}>
-                        <div className="flex items-center gap-2.5">
-                          <span className="font-mono text-xs font-bold text-slate-400 w-4 text-center">
-                            {idx + 1}º
-                          </span>
-                          <div>
-                            <h4 className="font-bold text-xs">{t.name} {isEliminated && '(Eliminada)'}</h4>
-                            <p className="text-[10px] text-slate-400 font-medium">
-                              Certas: {t.correct} | Erradas: {t.wrong} | Aproveitamento: {t.correct + t.wrong > 0 ? Math.round((t.correct / (t.correct + t.wrong)) * 100) : 0}%
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-black text-sm text-display text-slate-800 block">
-                            {t.score} pts
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Answers Log History */}
-              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-                <h3 className="text-base font-bold text-slate-800 text-display border-b pb-2">
-                  Histórico de Respostas
-                </h3>
-
-                {answers.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic text-center py-6">Nenhuma resposta registada ainda.</p>
-                ) : (
-                  <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
-                    {answers.slice().reverse().map((ans) => {
-                      const team = teams.find(t => t.id === ans.teamId);
-                      const q = questions.find(question => question.id === ans.questionId);
-                      return (
-                        <div key={ans.id} className="border border-slate-100 p-2.5 rounded-lg text-xs space-y-1 bg-slate-50/50">
-                          <div className="flex justify-between items-center">
-                            <strong className="text-slate-700">{team?.name || 'Equipa'}</strong>
-                            <span className={`text-[10px] font-bold ${ans.isCorrect ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              {ans.isCorrect ? `+${ans.pointsEarned} pts` : 'Errado'}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 italic">"{q?.question || 'Pergunta'}"</p>
-                          <p className="text-[9px] text-slate-400">Respondido por: {ans.memberName} • Rodada {ans.roundNumber}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
 
             </div>
           </>

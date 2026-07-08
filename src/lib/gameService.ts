@@ -74,6 +74,30 @@ export async function updateGameState(updates: Partial<GameState>) {
   await updateDoc(docRef, updates);
 }
 
+// Shared comparator used everywhere teams are ranked (leaderboard, judge panel, winner screen).
+// Ranking order:
+//   1. Aproveitamento % (acertos / total de respostas) — critério principal
+//   2. Pontuação (score)
+//   3. Número de respostas certas
+//   4. Menos respostas erradas
+//   5. Tempo médio de resposta (mais rápido primeiro)
+// This chain ensures a deterministic result even when teams are fully tied on
+// accuracy (e.g. everyone at 0% because no one has answered correctly yet) —
+// previously that case fell back to arbitrary Firestore snapshot order.
+export function compareTeams(a: Team, b: Team): number {
+  const aTotal = a.correct + a.wrong;
+  const bTotal = b.correct + b.wrong;
+  const aRate = aTotal > 0 ? a.correct / aTotal : 0;
+  const bRate = bTotal > 0 ? b.correct / bTotal : 0;
+  if (bRate !== aRate) return bRate - aRate;
+  if (b.score !== a.score) return b.score - a.score;
+  if (b.correct !== a.correct) return b.correct - a.correct;
+  if (a.wrong !== b.wrong) return a.wrong - b.wrong;
+  const aAvg = aTotal > 0 && a.totalAnswerTimeMs ? a.totalAnswerTimeMs / aTotal : Infinity;
+  const bAvg = bTotal > 0 && b.totalAnswerTimeMs ? b.totalAnswerTimeMs / bTotal : Infinity;
+  return aAvg - bAvg;
+}
+
 // 4. Subscribe to Teams
 export function subscribeToTeams(onUpdate: (teams: Team[]) => void) {
   // NOTE: we intentionally do NOT use orderBy() with multiple fields here.
@@ -90,18 +114,7 @@ export function subscribeToTeams(onUpdate: (teams: Team[]) => void) {
       snapshot.forEach((doc) => {
         teams.push({ id: doc.id, ...doc.data() } as Team);
       });
-      teams.sort((a, b) => {
-        // Ranking principal: % de aproveitamento (acertos / total de respostas)
-        const aTotal = a.correct + a.wrong;
-        const bTotal = b.correct + b.wrong;
-        const aRate = aTotal > 0 ? a.correct / aTotal : 0;
-        const bRate = bTotal > 0 ? b.correct / bTotal : 0;
-        if (bRate !== aRate) return bRate - aRate;
-        // Desempate: pontuação
-        if (b.score !== a.score) return b.score - a.score;
-        // Desempate final: número de respostas certas
-        return b.correct - a.correct;
-      });
+      teams.sort(compareTeams);
       onUpdate(teams);
     },
     (error) => {

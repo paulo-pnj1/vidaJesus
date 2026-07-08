@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameState, Team, Answer } from '../types';
-import { subscribeToGameState, subscribeToTeams, subscribeToAnswers } from '../lib/gameService';
+import { subscribeToGameState, subscribeToTeams, subscribeToAnswers, compareTeams } from '../lib/gameService';
 import { Trophy, Scale } from 'lucide-react';
 
 export default function JudgePanel() {
@@ -19,16 +19,8 @@ export default function JudgePanel() {
     };
   }, []);
 
-  // Ranking: by % aproveitamento (acertos / total), then by score, then by number of correct answers
-  const ranked = [...teams].sort((a, b) => {
-    const aTotal = a.correct + a.wrong;
-    const bTotal = b.correct + b.wrong;
-    const aRate = aTotal > 0 ? a.correct / aTotal : 0;
-    const bRate = bTotal > 0 ? b.correct / bTotal : 0;
-    if (bRate !== aRate) return bRate - aRate;
-    if (b.score !== a.score) return b.score - a.score;
-    return b.correct - a.correct;
-  });
+  // Ranking: ver compareTeams() em gameService.ts para a ordem de critérios/desempates
+  const ranked = [...teams].sort(compareTeams);
 
   const winner = ranked.length > 0 ? ranked[0] : null;
   const gameFinished = gameState?.status === 'finished';
@@ -144,7 +136,7 @@ export default function JudgePanel() {
 
             <div className="text-center pt-2">
               <span className="text-[10px] text-slate-500 font-mono">
-                ★ Classificação por Aproveitamento (%) • Desempate: Pontuação, depois Acertos • Sincronizado automaticamente
+                ★ Classificação por Aproveitamento (%) • Desempate: Pontuação → Acertos → Menos Erros → Tempo Médio • Sincronizado automaticamente
               </span>
             </div>
           </div>
