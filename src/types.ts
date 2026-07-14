@@ -1,7 +1,20 @@
+// Faixas etárias do concurso. Cada equipa pertence a uma faixa e só recebe
+// perguntas cadastradas para essa mesma faixa (dificuldade adaptada).
+export type AgeCategory = 'junior' | 'pleno' | 'senior';
+
+export const AGE_CATEGORIES: AgeCategory[] = ['junior', 'pleno', 'senior'];
+
+export const AGE_CATEGORY_LABELS: Record<AgeCategory, string> = {
+  junior: 'Júnior',
+  pleno: 'Pleno',
+  senior: 'Sénior'
+};
+
 export interface Team {
   id: string;
   name: string;
   membersCount: number;
+  ageCategory: AgeCategory;
   score: number;
   correct: number;
   wrong: number;
@@ -20,6 +33,7 @@ export interface Question {
   correctAnswer: any; // index (number), boolean, or string, or ordered indexes
   points: number;
   difficulty: 'easy' | 'medium' | 'hard' | 'very_hard';
+  ageCategory: AgeCategory; // Faixa etária a que esta pergunta se destina
   used: boolean;
 }
 

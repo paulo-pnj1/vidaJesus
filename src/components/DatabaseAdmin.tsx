@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Question } from '../types';
+import { Question, AgeCategory, AGE_CATEGORIES, AGE_CATEGORY_LABELS } from '../types';
 import { 
   addQuestion, 
   updateQuestion, 
   deleteQuestion, 
   seedQuestionsIfEmpty, 
-  batchImportQuestions 
+  batchImportQuestions,
+  autoAssignAgeCategoriesByDifficulty
 } from '../lib/gameService';
-import { Plus, Trash2, Edit2, Download, AlertCircle, CheckCircle, Database, HelpCircle, FileJson, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, AlertCircle, CheckCircle, Database, HelpCircle, FileJson, X, Wand2 } from 'lucide-react';
 
 interface DatabaseAdminProps {
   questions: Question[];
@@ -44,6 +45,8 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
   const [activeTab, setActiveTab] = useState<'list' | 'add' | 'import'>('list');
   const [filterLesson, setFilterLesson] = useState<string>('');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('');
+  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [autoAssigning, setAutoAssigning] = useState(false);
   
   // Add/Edit Form State
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -53,6 +56,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
   const [type, setType] = useState<Question['type']>('multiple_choice');
   const [questionText, setQuestionText] = useState('');
   const [difficulty, setDifficulty] = useState<Question['difficulty']>('easy');
+  const [ageCategory, setAgeCategory] = useState<AgeCategory>('junior');
   const [points, setPoints] = useState(10);
   
   // Options state
@@ -136,6 +140,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
       correctAnswer: finalCorrectAnswer,
       points: Number(points),
       difficulty,
+      ageCategory,
     };
 
     try {
@@ -152,6 +157,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
       setQuestionText('');
       setOptions(['', '', '', '']);
       setCorrectAnswerIndex(0);
+      setAgeCategory('junior');
       setActiveTab('list');
     } catch (err: any) {
       alert('Erro ao salvar pergunta: ' + err.message);
@@ -170,6 +176,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
     setType(q.type);
     setQuestionText(q.question);
     setDifficulty(q.difficulty);
+    setAgeCategory(q.ageCategory || 'junior');
     setPoints(q.points);
     setOptions(q.options);
     
@@ -213,10 +220,17 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
       const list = Array.isArray(parsed) ? parsed : [parsed];
       
       // Validate structure
+      const difficultyToCategory: Record<Question['difficulty'], AgeCategory> = {
+        easy: 'junior',
+        medium: 'pleno',
+        hard: 'senior',
+        very_hard: 'senior'
+      };
       const validated = list.map((q: any, index) => {
         if (!q.lesson || !q.type || !q.question || !Array.isArray(q.options)) {
           throw new Error(`Item nº ${index + 1} inválido. Certifique-se de que possui lesson, type, question e options.`);
         }
+        const finalDifficulty = (q.difficulty || 'easy') as Question['difficulty'];
         return {
           lesson: String(q.lesson),
           type: q.type as Question['type'],
@@ -224,7 +238,8 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
           options: q.options.map(String),
           correctAnswer: q.correctAnswer,
           points: Number(q.points) || 10,
-          difficulty: (q.difficulty || 'easy') as Question['difficulty']
+          difficulty: finalDifficulty,
+          ageCategory: (AGE_CATEGORIES.includes(q.ageCategory) ? q.ageCategory : difficultyToCategory[finalDifficulty]) as AgeCategory
         };
       });
 
@@ -240,11 +255,29 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
   const filteredQuestions = questions.filter(q => {
     const matchLesson = !filterLesson || q.lesson === filterLesson;
     const matchDifficulty = !filterDifficulty || q.difficulty === filterDifficulty;
-    return matchLesson && matchDifficulty;
+    const matchCategory = !filterCategory || q.ageCategory === filterCategory;
+    return matchLesson && matchDifficulty && matchCategory;
   });
 
   // Unique lessons in current questions
   const uniqueLessons = Array.from(new Set(questions.map(q => q.lesson)));
+
+  // Perguntas antigas que ainda não têm faixa etária atribuída
+  const questionsMissingCategory = questions.filter(q => !q.ageCategory).length;
+
+  const handleAutoAssignCategories = async () => {
+    setAutoAssigning(true);
+    try {
+      const count = await autoAssignAgeCategoriesByDifficulty();
+      alert(count > 0
+        ? `${count} pergunta(s) receberam faixa etária automaticamente, com base na dificuldade.`
+        : 'Todas as perguntas já têm uma faixa etária atribuída.');
+    } catch (err: any) {
+      alert('Erro ao atribuir faixas: ' + err.message);
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -290,15 +323,28 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
             </button>
           </div>
           
-          {questions.length === 0 && (
-            <button
-              onClick={handleSeedDefaults}
-              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Carregar Perguntas Padrão (23 Lições)
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {questionsMissingCategory > 0 && (
+              <button
+                onClick={handleAutoAssignCategories}
+                disabled={autoAssigning}
+                title="Atribui Júnior/Pleno/Sénior automaticamente com base na dificuldade de cada pergunta"
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                {autoAssigning ? 'A atribuir...' : `Atribuir Faixas Automaticamente (${questionsMissingCategory})`}
+              </button>
+            )}
+            {questions.length === 0 && (
+              <button
+                onClick={handleSeedDefaults}
+                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Carregar Perguntas Padrão (23 Lições)
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content Area */}
@@ -337,9 +383,23 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
                   </select>
                 </div>
 
+                <div className="w-[160px]">
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Filtrar por Faixa</label>
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 outline-none focus:border-slate-500"
+                  >
+                    <option value="">Todas</option>
+                    {AGE_CATEGORIES.map(c => (
+                      <option key={c} value={c}>{AGE_CATEGORY_LABELS[c]}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="flex items-end">
                   <button
-                    onClick={() => { setFilterLesson(''); setFilterDifficulty(''); }}
+                    onClick={() => { setFilterLesson(''); setFilterDifficulty(''); setFilterCategory(''); }}
                     className="text-xs text-slate-500 hover:text-slate-800 underline pb-2"
                   >
                     Limpar Filtros
@@ -374,6 +434,15 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
                           <span className="text-[10px] font-mono text-slate-400">
                             Tipo: {q.type}
                           </span>
+                          {q.ageCategory ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-blue-100 text-blue-700">
+                              {AGE_CATEGORY_LABELS[q.ageCategory]}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-slate-200 text-slate-500">
+                              Sem faixa
+                            </span>
+                          )}
                         </div>
                         <h4 className="font-semibold text-slate-800 text-sm">{q.question}</h4>
                         
@@ -495,8 +564,8 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
                 />
               </div>
 
-              {/* Difficulty & Points */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Difficulty, Age Category & Points */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Dificuldade</label>
                   <select
@@ -508,6 +577,19 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
                     <option value="medium">Médio</option>
                     <option value="hard">Difícil</option>
                     <option value="very_hard">Muito Difícil</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Faixa Etária</label>
+                  <select
+                    value={ageCategory}
+                    onChange={(e) => setAgeCategory(e.target.value as AgeCategory)}
+                    className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2.5 outline-none focus:border-slate-500"
+                  >
+                    {AGE_CATEGORIES.map(c => (
+                      <option key={c} value={c}>{AGE_CATEGORY_LABELS[c]}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -658,10 +740,14 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
     "options": ["Anjo Miguel", "Anjo Gabriel", "Anjo Rafael", "Moisés"],
     "correctAnswer": 1,
     "points": 20,
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "ageCategory": "junior"
   }
 ]`}
                   </pre>
+                  <p className="text-[10px] text-blue-700/80">
+                    O campo "ageCategory" é opcional (junior / pleno / senior). Se omitido, é atribuído automaticamente a partir da dificuldade.
+                  </p>
                 </div>
               </div>
 

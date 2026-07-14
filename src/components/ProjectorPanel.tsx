@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, Question, Team, Answer } from '../types';
-import { subscribeToTeams, subscribeToQuestions, subscribeToAnswers, compareTeams } from '../lib/gameService';
+import { GameState, Question, Team, Answer, AGE_CATEGORY_LABELS } from '../types';
+import { subscribeToTeams, subscribeToQuestions, subscribeToAnswers, compareTeams, groupTeamsByCategory } from '../lib/gameService';
 import { Award, Timer, Trophy, CheckCircle, XCircle, Users, HelpCircle, ArrowUpRight, Flame } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -209,15 +209,10 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
   const activeQuestion = questions.find(q => q.id === gameState.currentQuestionId);
   const activeTeam = teams.find(t => t.id === gameState.currentTeamId);
 
-  // Calculate winner team for finished screen
-  // Ver compareTeams() em gameService.ts para a ordem de critérios/desempates
-  const getWinner = (): Team | null => {
-    if (teams.length === 0) return null;
-    const sorted = [...teams].sort(compareTeams);
-    return sorted[0];
-  };
-
-  const winner = getWinner();
+  // Vencedores por faixa etária para o ecrã de campeões.
+  // Ver compareTeams() em gameService.ts para a ordem de critérios/desempates.
+  const categoryGroups = groupTeamsByCategory(teams);
+  const categoryWinners = categoryGroups.map(g => ({ category: g.category, winner: g.teams[0] }));
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-6 overflow-hidden relative font-sans select-none">
@@ -286,26 +281,32 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
         )}
 
         {/* FINISHED / CHAMPIONS PODIUM SCREEN */}
-        {gameState.status === 'finished' && winner && (
-          <div className="text-center space-y-6 max-w-3xl py-8 w-full">
-            <div className="relative inline-block">
-              <div className="w-32 h-32 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-full flex items-center justify-center mx-auto shadow-2xl ring-8 ring-amber-400/10 scale-110">
-                <Trophy className="w-16 h-16 text-slate-950 stroke-[1.5]" />
-              </div>
-              <div className="absolute bottom-0 right-0 bg-blue-600 border-4 border-slate-950 px-2.5 py-1 rounded-full text-xs font-black uppercase text-white shadow-md">
-                Campeão
-              </div>
+        {gameState.status === 'finished' && categoryWinners.length > 0 && (
+          <div className="text-center space-y-10 max-w-5xl py-8 w-full">
+            <p className="text-xs uppercase font-extrabold tracking-widest text-amber-400">Vencedores do Concurso</p>
+            <div className={`grid gap-6 ${categoryWinners.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : categoryWinners.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-3'}`}>
+              {categoryWinners.map(({ category, winner }) => (
+                <div key={category} className="space-y-4">
+                  <div className="relative inline-block">
+                    <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-full flex items-center justify-center mx-auto shadow-2xl ring-8 ring-amber-400/10">
+                      <Trophy className="w-12 h-12 text-slate-950 stroke-[1.5]" />
+                    </div>
+                    <div className="absolute bottom-0 right-0 bg-blue-600 border-4 border-slate-950 px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-white shadow-md">
+                      Campeão
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] uppercase font-extrabold tracking-widest text-blue-400">Faixa {AGE_CATEGORY_LABELS[category]}</p>
+                    <h2 className="text-3xl font-black tracking-tight text-display text-white">
+                      {winner.name}
+                    </h2>
+                  </div>
+                </div>
+              ))}
             </div>
-
-            <div className="space-y-2">
-              <p className="text-xs uppercase font-extrabold tracking-widest text-amber-400">Vencedor do Concurso</p>
-              <h2 className="text-5xl font-black tracking-tight text-display text-white">
-                {winner.name}
-              </h2>
-              <p className="text-sm text-slate-400">
-                Parabéns à equipa vencedora pelo excelente aproveitamento no estudo da Vida de Jesus!
-              </p>
-            </div>
+            <p className="text-sm text-slate-400 max-w-lg mx-auto">
+              Parabéns às equipas vencedoras pelo excelente aproveitamento no estudo da Vida de Jesus!
+            </p>
           </div>
         )}
 
@@ -324,6 +325,9 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
                   <div>
                     <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-1 justify-center md:justify-start">
                       <Flame className="w-3.5 h-3.5 fill-current" /> Equipa a responder agora
+                      <span className="ml-1 text-blue-400 bg-blue-950/50 border border-blue-900/50 px-2 py-0.5 rounded-full normal-case font-bold tracking-normal">
+                        {AGE_CATEGORY_LABELS[activeTeam.ageCategory]}
+                      </span>
                     </span>
                     <h2 className="text-3xl font-extrabold text-display text-white">{activeTeam.name}</h2>
                     {gameState.currentMemberName && (

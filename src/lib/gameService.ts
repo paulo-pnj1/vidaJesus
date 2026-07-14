@@ -15,7 +15,7 @@ import {
   getDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Team, Question, GameState, Answer, GameStatus, GameMode } from '../types';
+import { Team, Question, GameState, Answer, GameStatus, GameMode, AgeCategory, AGE_CATEGORIES } from '../types';
 import { defaultQuestions } from '../data/defaultQuestions';
 
 const GAME_STATE_ID = 'current_game';
@@ -98,6 +98,17 @@ export function compareTeams(a: Team, b: Team): number {
   return aAvg - bAvg;
 }
 
+// Groups already-sorted-or-not teams into the 3 age categories, sorting each
+// group internally with compareTeams(). Empty categories are omitted.
+export function groupTeamsByCategory(teams: Team[]): { category: AgeCategory; teams: Team[] }[] {
+  return AGE_CATEGORIES
+    .map((category) => ({
+      category,
+      teams: teams.filter((t) => t.ageCategory === category).sort(compareTeams)
+    }))
+    .filter((g) => g.teams.length > 0);
+}
+
 // 4. Subscribe to Teams
 export function subscribeToTeams(onUpdate: (teams: Team[]) => void) {
   // NOTE: we intentionally do NOT use orderBy() with multiple fields here.
@@ -147,13 +158,14 @@ export function subscribeToAnswers(onUpdate: (answers: Answer[]) => void) {
 }
 
 // 10. Add Team
-export async function addTeam(name: string, membersCount: number) {
+export async function addTeam(name: string, membersCount: number, ageCategory: AgeCategory) {
   const id = `team_${Date.now()}`;
   const teamRef = doc(db, 'teams', id);
   const newTeam: Team = {
     id,
     name,
     membersCount,
+    ageCategory,
     score: 0,
     correct: 0,
     wrong: 0,
@@ -325,4 +337,35 @@ export async function batchImportQuestions(questions: Omit<Question, 'id' | 'use
     });
   });
   await batch.commit();
+}
+
+// 18. Migration helper — assigns an ageCategory to any question in the bank
+// that doesn't have one yet (e.g. questions created before this feature),
+// based on its difficulty: easy -> junior, medium -> pleno, hard/very_hard -> senior.
+// Existing ageCategory values are never overwritten. Returns how many were updated.
+export async function autoAssignAgeCategoriesByDifficulty(): Promise<number> {
+  const difficultyToCategory: Record<Question['difficulty'], AgeCategory> = {
+    easy: 'junior',
+    medium: 'pleno',
+    hard: 'senior',
+    very_hard: 'senior'
+  };
+
+  const qCol = collection(db, 'questions');
+  const snapshot = await getDocs(qCol);
+  const batch = writeBatch(db);
+  let count = 0;
+
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data() as Question;
+    if (!data.ageCategory) {
+      batch.update(docSnap.ref, { ageCategory: difficultyToCategory[data.difficulty] || 'pleno' });
+      count++;
+    }
+  });
+
+  if (count > 0) {
+    await batch.commit();
+  }
+  return count;
 }

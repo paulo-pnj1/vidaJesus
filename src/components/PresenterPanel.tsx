@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GameState, Question, Team, Answer } from '../types';
+import { GameState, Question, Team, Answer, AgeCategory, AGE_CATEGORIES, AGE_CATEGORY_LABELS } from '../types';
 import { 
   updateGameState, 
   subscribeToTeams, 
@@ -30,6 +30,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   // Setup Form State
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamMembers, setNewTeamMembers] = useState(4);
+  const [newTeamCategory, setNewTeamCategory] = useState<AgeCategory>('pleno');
   const [setupTotalQuestions, setSetupTotalQuestions] = useState(10);
   const [setupTimerDuration, setSetupTimerDuration] = useState(30);
 
@@ -55,13 +56,19 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     };
   }, []);
 
-  // Set default selected question when category or list updates
+  // Set default selected question when lesson filter or list updates.
+  // Perguntas são sempre restritas à faixa etária da equipa da vez.
   useEffect(() => {
-    const available = questions.filter(q => !q.used && (!filterLesson || q.lesson === filterLesson));
+    const activeTeamCategory = teams.find(t => t.id === gameState.currentTeamId)?.ageCategory;
+    const available = questions.filter(q =>
+      !q.used &&
+      (!filterLesson || q.lesson === filterLesson) &&
+      (!activeTeamCategory || q.ageCategory === activeTeamCategory)
+    );
     if (available.length > 0 && !selectedQuestionId) {
       setSelectedQuestionId(available[0].id);
     }
-  }, [questions, filterLesson, selectedQuestionId]);
+  }, [questions, filterLesson, selectedQuestionId, teams, gameState.currentTeamId]);
 
   // Handle Respondent Name check against Rotation rule
   const handleMemberNameChange = (val: string) => {
@@ -82,7 +89,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const handleAddTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newTeamName.trim()) {
-      await addTeam(newTeamName.trim(), Number(newTeamMembers));
+      await addTeam(newTeamName.trim(), Number(newTeamMembers), newTeamCategory);
       setNewTeamName('');
     }
   };
@@ -109,6 +116,22 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     }
 
     const questionsPerTeam = setupTotalQuestions / teams.length;
+
+    // Cada equipa só recebe perguntas da sua própria faixa etária, por isso é
+    // preciso garantir que há perguntas suficientes NAQUELA faixa específica.
+    for (const category of AGE_CATEGORIES) {
+      const teamsInCategory = teams.filter(t => t.ageCategory === category).length;
+      if (teamsInCategory === 0) continue;
+      const neededForCategory = teamsInCategory * questionsPerTeam;
+      const availableInCategory = questions.filter(q => !q.used && q.ageCategory === category).length;
+      if (neededForCategory > availableInCategory) {
+        alert(
+          `A faixa ${AGE_CATEGORY_LABELS[category]} tem ${teamsInCategory} equipa(s) e precisa de ${neededForCategory} perguntas, ` +
+          `mas só há ${availableInCategory} disponíveis nessa faixa. Adicione mais perguntas dessa faixa no Banco de Perguntas ou reduza o número de perguntas.`
+        );
+        return;
+      }
+    }
     
     // Shuffle teams for the first turn order
     const shuffled = [...teams].sort(() => Math.random() - 0.5);
@@ -291,13 +314,15 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     }
   };
 
-  // List lessons for filter
-  const lessonsWithUnusedQuestions = Array.from(new Set(
-    questions.filter(q => !q.used).map(q => q.lesson)
-  ));
-
   const activeQuestion = questions.find(q => q.id === gameState.currentQuestionId);
   const activeTeam = teams.find(t => t.id === gameState.currentTeamId);
+
+  // List lessons for filter — restrito à faixa etária da equipa da vez
+  const lessonsWithUnusedQuestions = Array.from(new Set(
+    questions
+      .filter(q => !q.used && (!activeTeam || q.ageCategory === activeTeam.ageCategory))
+      .map(q => q.lesson)
+  ));
 
   return (
     <div className="bg-slate-50 min-h-screen text-slate-800 pb-12">
@@ -409,9 +434,23 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                 </span>
               </div>
 
+              {teams.length > 0 && (
+                <div className="flex flex-wrap gap-2 -mt-2">
+                  {AGE_CATEGORIES.map(c => {
+                    const count = teams.filter(t => t.ageCategory === c).length;
+                    if (count === 0) return null;
+                    return (
+                      <span key={c} className="text-[10px] font-bold px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-full text-slate-600">
+                        {AGE_CATEGORY_LABELS[c]}: {count} equipa{count > 1 ? 's' : ''}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Add Team form */}
               <form onSubmit={handleAddTeam} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div className="md:col-span-6">
+                <div className="md:col-span-5">
                   <label className="block text-xs font-bold text-slate-600 mb-1">Nome da Equipa</label>
                   <input
                     type="text"
@@ -422,7 +461,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     required
                   />
                 </div>
-                <div className="md:col-span-4">
+                <div className="md:col-span-3">
                   <label className="block text-xs font-bold text-slate-600 mb-1">Nº Integrantes</label>
                   <input
                     type="number"
@@ -433,6 +472,18 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     max={20}
                     required
                   />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Faixa</label>
+                  <select
+                    value={newTeamCategory}
+                    onChange={(e) => setNewTeamCategory(e.target.value as AgeCategory)}
+                    className="w-full text-sm bg-white border border-slate-200 rounded-lg p-2 outline-none focus:border-slate-400"
+                  >
+                    {AGE_CATEGORIES.map(c => (
+                      <option key={c} value={c}>{AGE_CATEGORY_LABELS[c]}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="md:col-span-2">
                   <button
@@ -460,7 +511,16 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                           {t.name.substr(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <h4 className="font-bold text-slate-800 text-sm">{t.name}</h4>
+                          <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                            {t.name}
+                            <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${
+                              t.ageCategory === 'junior' ? 'bg-sky-100 text-sky-700' :
+                              t.ageCategory === 'senior' ? 'bg-purple-100 text-purple-700' :
+                              'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {AGE_CATEGORY_LABELS[t.ageCategory]}
+                            </span>
+                          </h4>
                           <p className="text-[11px] text-slate-500">{t.membersCount} Integrantes</p>
                         </div>
                       </div>
@@ -560,6 +620,9 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   <h3 className="text-lg font-bold text-slate-800 text-display border-b pb-2 flex items-center gap-2">
                     <BookOpen className="w-5 h-5 text-amber-500" />
                     Selecione a Pergunta do Desafio
+                    <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full">
+                      Faixa: {AGE_CATEGORY_LABELS[activeTeam.ageCategory]}
+                    </span>
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -585,7 +648,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                         className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:bg-white focus:border-slate-400"
                       >
                         {questions
-                          .filter(q => !q.used && (!filterLesson || q.lesson === filterLesson))
+                          .filter(q => !q.used && (!filterLesson || q.lesson === filterLesson) && q.ageCategory === activeTeam.ageCategory)
                           .map(q => (
                             <option key={q.id} value={q.id}>
                               [{q.difficulty.toUpperCase()} - {q.points} pts] {q.question.substr(0, 50)}...

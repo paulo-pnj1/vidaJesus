@@ -10,6 +10,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 10,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -21,6 +22,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 0,
     points: 10,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -32,6 +34,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 15,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -43,6 +46,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 15,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -54,6 +58,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 20,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -65,6 +70,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 2,
     points: 20,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -76,6 +82,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 2,
     points: 15,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -87,6 +94,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 0,
     points: 15,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -98,6 +106,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 0,
     points: 10,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -109,6 +118,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 0,
     points: 10,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -120,6 +130,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 20,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -136,6 +147,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: [0, 1, 2, 3], // The array reflects correct order index of items. 0 then 1 then 2 then 3.
     points: 30,
     difficulty: "hard",
+    ageCategory: "senior",
     used: false
   },
   {
@@ -147,6 +159,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 15,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -158,6 +171,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 20,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -169,6 +183,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 3,
     points: 15,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -180,6 +195,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 2,
     points: 10,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -191,6 +207,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 10,
     difficulty: "easy",
+    ageCategory: "junior",
     used: false
   },
   {
@@ -202,6 +219,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 0,
     points: 15,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -218,6 +236,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 0,
     points: 15,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -229,6 +248,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 0,
     points: 20,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -240,6 +260,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 15,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -251,6 +272,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 0,
     points: 15,
     difficulty: "medium",
+    ageCategory: "pleno",
     used: false
   },
   {
@@ -262,6 +284,7 @@ export const defaultQuestions: Question[] = [
     correctAnswer: 1,
     points: 20,
     difficulty: "hard",
+    ageCategory: "senior",
     used: false
   }
 ];

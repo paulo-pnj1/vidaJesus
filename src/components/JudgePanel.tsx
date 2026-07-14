@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { GameState, Team, Answer, Question } from '../types';
-import { subscribeToGameState, subscribeToTeams, subscribeToAnswers, subscribeToQuestions, compareTeams } from '../lib/gameService';
+import { GameState, Team, Answer, Question, AGE_CATEGORY_LABELS } from '../types';
+import { subscribeToGameState, subscribeToTeams, subscribeToAnswers, subscribeToQuestions, compareTeams, groupTeamsByCategory } from '../lib/gameService';
 import { Trophy, Scale, HelpCircle, CheckCircle, Flame } from 'lucide-react';
 
 // Returns the human-readable text of a question's correct option(s), regardless of type.
@@ -48,10 +48,9 @@ export default function JudgePanel() {
   );
   const showActiveQuestionStage = !!gameState && gameState.status !== 'setup' && gameState.status !== 'finished';
 
-  // Ranking: ver compareTeams() em gameService.ts para a ordem de critérios/desempates
-  const ranked = [...teams].sort(compareTeams);
-
-  const winner = ranked.length > 0 ? ranked[0] : null;
+  // Classificação separada por faixa etária — ver compareTeams() em gameService.ts
+  // para a ordem de critérios/desempates dentro de cada faixa.
+  const groups = groupTeamsByCategory(teams);
   const gameFinished = gameState?.status === 'finished';
 
   const formatAvgTime = (t: Team) => {
@@ -120,6 +119,9 @@ export default function JudgePanel() {
                     )}
                   </p>
                 </div>
+                <span className="ml-auto text-[10px] font-black uppercase tracking-wider bg-blue-950/50 border border-blue-900/50 text-blue-400 px-2.5 py-1 rounded-full">
+                  {AGE_CATEGORY_LABELS[activeTeam.ageCategory]}
+                </span>
               </div>
             )}
 
@@ -182,7 +184,7 @@ export default function JudgePanel() {
           </div>
         )}
 
-        {ranked.length === 0 ? (
+        {groups.length === 0 ? (
           <div className="text-center py-24 space-y-3">
             <div className="w-16 h-16 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center mx-auto">
               <Trophy className="w-8 h-8 text-slate-500" />
@@ -191,64 +193,76 @@ export default function JudgePanel() {
             <p className="text-xs text-slate-500">A tabela aparece automaticamente assim que o apresentador criar as equipas.</p>
           </div>
         ) : (
-          <div className="space-y-3 mt-4">
-            {gameFinished && winner && (
-              <div className="bg-gradient-to-r from-amber-500/20 to-amber-400/5 border border-amber-500/40 rounded-2xl p-5 flex items-center gap-4">
-                <Trophy className="w-10 h-10 text-amber-400 flex-shrink-0" />
-                <div>
-                  <p className="text-xs uppercase font-bold tracking-wider text-amber-400">Grupo Vencedor</p>
-                  <h2 className="text-2xl font-black text-display">{winner.name}</h2>
-                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                    Melhor aproveitamento: {winner.correct + winner.wrong > 0 ? Math.round((winner.correct / (winner.correct + winner.wrong)) * 100) : 0}%
-                  </p>
-                </div>
-              </div>
-            )}
+          <div className="space-y-8 mt-4">
+            {groups.map(({ category, teams: groupTeams }) => {
+              const winner = groupTeams[0] || null;
+              return (
+                <div key={category} className="space-y-3">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-blue-400 px-1 flex items-center gap-2">
+                    Faixa {AGE_CATEGORY_LABELS[category]}
+                    <span className="text-slate-500 font-mono font-normal normal-case">({groupTeams.length} equipa{groupTeams.length > 1 ? 's' : ''})</span>
+                  </h3>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-              <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                <div className="col-span-1">#</div>
-                <div className="col-span-3">Grupo</div>
-                <div className="col-span-2 text-center text-amber-400">Aproveit. ★</div>
-                <div className="col-span-1 text-center">Acertos</div>
-                <div className="col-span-1 text-center">Erros</div>
-                <div className="col-span-2 text-center">Tempo Médio</div>
-                <div className="col-span-2 text-center">Total Acertos</div>
-              </div>
+                  {gameFinished && winner && (
+                    <div className="bg-gradient-to-r from-amber-500/20 to-amber-400/5 border border-amber-500/40 rounded-2xl p-5 flex items-center gap-4">
+                      <Trophy className="w-10 h-10 text-amber-400 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs uppercase font-bold tracking-wider text-amber-400">Vencedor — Faixa {AGE_CATEGORY_LABELS[category]}</p>
+                        <h2 className="text-2xl font-black text-display">{winner.name}</h2>
+                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          Melhor aproveitamento: {winner.correct + winner.wrong > 0 ? Math.round((winner.correct / (winner.correct + winner.wrong)) * 100) : 0}%
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
-              {ranked.map((t, idx) => {
-                const total = t.correct + t.wrong;
-                const rate = total > 0 ? Math.round((t.correct / total) * 100) : 0;
-                const isLeader = idx === 0;
-                const isEliminated = gameState?.eliminatedTeamIds?.includes(t.id);
-                return (
-                  <div
-                    key={t.id}
-                    className={`grid grid-cols-12 gap-2 px-5 py-4 items-center border-b border-slate-800/60 last:border-b-0 ${
-                      isEliminated ? 'opacity-40 line-through' :
-                      isLeader ? 'bg-amber-400/5' : ''
-                    }`}
-                  >
-                    <div className="col-span-1 font-mono text-sm font-bold text-slate-500">
-                      {idx + 1}º
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                    <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                      <div className="col-span-1">#</div>
+                      <div className="col-span-3">Grupo</div>
+                      <div className="col-span-2 text-center text-amber-400">Aproveit. ★</div>
+                      <div className="col-span-1 text-center">Acertos</div>
+                      <div className="col-span-1 text-center">Erros</div>
+                      <div className="col-span-2 text-center">Tempo Médio</div>
+                      <div className="col-span-2 text-center">Total Acertos</div>
                     </div>
-                    <div className="col-span-3 flex items-center gap-2">
-                      {isLeader && !isEliminated && <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />}
-                      <span className="font-bold text-sm truncate">{t.name}</span>
-                    </div>
-                    <div className="col-span-2 text-center">
-                      <span className={`font-mono text-base font-black ${isLeader && !isEliminated ? 'text-amber-400' : 'text-white'}`}>
-                        {rate}%
-                      </span>
-                    </div>
-                    <div className="col-span-1 text-center font-mono text-sm text-emerald-400 font-bold">{t.correct}</div>
-                    <div className="col-span-1 text-center font-mono text-sm text-rose-400 font-bold">{t.wrong}</div>
-                    <div className="col-span-2 text-center font-mono text-xs text-slate-300">{formatAvgTime(t)}</div>
-                    <div className="col-span-2 text-center font-mono text-xs text-sky-300 font-bold">{formatTotalCorrectTime(t)}</div>
+
+                    {groupTeams.map((t, idx) => {
+                      const total = t.correct + t.wrong;
+                      const rate = total > 0 ? Math.round((t.correct / total) * 100) : 0;
+                      const isLeader = idx === 0;
+                      const isEliminated = gameState?.eliminatedTeamIds?.includes(t.id);
+                      return (
+                        <div
+                          key={t.id}
+                          className={`grid grid-cols-12 gap-2 px-5 py-4 items-center border-b border-slate-800/60 last:border-b-0 ${
+                            isEliminated ? 'opacity-40 line-through' :
+                            isLeader ? 'bg-amber-400/5' : ''
+                          }`}
+                        >
+                          <div className="col-span-1 font-mono text-sm font-bold text-slate-500">
+                            {idx + 1}º
+                          </div>
+                          <div className="col-span-3 flex items-center gap-2">
+                            {isLeader && !isEliminated && <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />}
+                            <span className="font-bold text-sm truncate">{t.name}</span>
+                          </div>
+                          <div className="col-span-2 text-center">
+                            <span className={`font-mono text-base font-black ${isLeader && !isEliminated ? 'text-amber-400' : 'text-white'}`}>
+                              {rate}%
+                            </span>
+                          </div>
+                          <div className="col-span-1 text-center font-mono text-sm text-emerald-400 font-bold">{t.correct}</div>
+                          <div className="col-span-1 text-center font-mono text-sm text-rose-400 font-bold">{t.wrong}</div>
+                          <div className="col-span-2 text-center font-mono text-xs text-slate-300">{formatAvgTime(t)}</div>
+                          <div className="col-span-2 text-center font-mono text-xs text-sky-300 font-bold">{formatTotalCorrectTime(t)}</div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
 
             <div className="text-center pt-2">
               <span className="text-[10px] text-slate-500 font-mono">
