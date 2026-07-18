@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // Simple front-end gate so a stray link doesn't get spammed by strangers.
-// Like the presenter/judge login, this is NOT a real security boundary —
+// Like the presenter/judge login, this is NOT a real security boundary -
 // just a shared word the teachers are given verbally/on a poster on casting day.
 const CASTING_ACCESS_CODE = 'elenco2026';
 const CASTING_AUTH_KEY = 'bible_game_casting_auth';
@@ -293,7 +293,7 @@ export default function CastingPanel() {
   };
 
   // Builds a fresh casting session: picks `questionCount` random, unique
-  // questions from the chosen category (does NOT touch the `used` flag —
+  // questions from the chosen category (does NOT touch the `used` flag -
   // casting never affects the pool available for the final contest).
   const buildAndStartSession = () => {
     setError(null);
@@ -320,7 +320,7 @@ export default function CastingPanel() {
     prepareRound(0, picked);
 
     if (n < desired) {
-      // Doesn't block the flow — just lets the teacher know fewer questions were used.
+      // Doesn't block the flow - just lets the teacher know fewer questions were used.
       window.setTimeout(() => {
         alert(`Só havia ${n} pergunta(s) disponível(is) na categoria ${AGE_CATEGORY_LABELS[category as AgeCategory]}. O casting vai usar essa quantidade.`);
       }, 0);
@@ -406,7 +406,7 @@ export default function CastingPanel() {
     if (!winner) return;
     setSubmitting(true);
     try {
-      // Only the casting winner advances to the final contest — the turma's
+      // Only the casting winner advances to the final contest - the turma's
       // team is registered with a single competitor, not all 5 candidates.
       await registerCastingTeam(
         teacherName.trim(),
@@ -479,7 +479,7 @@ export default function CastingPanel() {
   const registeredInCategory = (c: AgeCategory) => teams.filter((t) => t.ageCategory === c);
 
   // ---------------------------------------------------------------------
-  // RUNNING: the live casting quiz — question + options appear right here,
+  // RUNNING: the live casting quiz - question + options appear right here,
   // no need to go to the Presenter/Projector screens.
   // ---------------------------------------------------------------------
   if (stage === 'running' && currentQuestion) {
@@ -539,7 +539,7 @@ export default function CastingPanel() {
                     <li key={idx}>{opt}</li>
                   ))}
                 </ol>
-                <p className="text-xs text-slate-400 italic">O aluno disse a ordem em voz alta — indique se acertou:</p>
+                <p className="text-xs text-slate-400 italic">O aluno disse a ordem em voz alta - indique se acertou:</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -603,7 +603,7 @@ export default function CastingPanel() {
                   : 'bg-rose-50 border-rose-200 text-rose-700'
               }`}>
                 {(currentQuestion.type === 'chronological' ? chronoResult : selectedOptionIdx === currentQuestion.correctAnswer)
-                  ? `Resposta CORRETA — +${currentQuestion.points} pontos para ${currentStudent} ✔`
+                  ? `Resposta CORRETA - +${currentQuestion.points} pontos para ${currentStudent} ✔`
                   : `Resposta INCORRETA ✖`}
               </div>
             )}
@@ -740,7 +740,7 @@ export default function CastingPanel() {
           </div>
           <div>
             <h1 className="text-xl font-black text-display tracking-tight">Painel de Casting</h1>
-            <p className="text-xs text-slate-400">Inscrição das turmas para o Desafio Bíblico — Vida de Jesus</p>
+            <p className="text-xs text-slate-400">Inscrição das turmas para o Desafio Bíblico - Vida de Jesus</p>
           </div>
         </div>
       </div>
@@ -847,8 +847,8 @@ export default function CastingPanel() {
           </h3>
           <p className="text-xs text-slate-500">
             As perguntas e opções aparecem aqui mesmo, uma pergunta por rodada, passando de aluno em aluno até acabar.
-            No final, o concorrente com mais pontos é o vencedor do casting — e é <strong>só ele(a)</strong> que fica inscrito(a) para representar a turma no concurso final.
-            Não é preciso ir à tela do apresentador — essa é só para o concurso final.
+            No final, o concorrente com mais pontos é o vencedor do casting - e é <strong>só ele(a)</strong> que fica inscrito(a) para representar a turma no concurso final.
+            Não é preciso ir à tela do apresentador - essa é só para o concurso final.
           </p>
 
           <div className="max-w-xs">
@@ -912,7 +912,7 @@ export default function CastingPanel() {
                       {list.map((t) => (
                         <li key={t.id} className="text-xs text-slate-700 bg-white/70 rounded-lg px-2.5 py-1.5">
                           <span className="font-bold">{t.className || t.name}</span>
-                          {t.teacherName && <span className="text-slate-500"> — {t.teacherName}</span>}
+                          {t.teacherName && <span className="text-slate-500"> - {t.teacherName}</span>}
                           {t.castingWinnerName && (
                             <span className="block text-[10px] text-amber-600 font-semibold mt-0.5 flex items-center gap-1">
                               <Medal className="w-3 h-3" /> Vencedor(a) do casting: {t.castingWinnerName}
