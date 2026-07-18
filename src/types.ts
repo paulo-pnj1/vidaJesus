@@ -27,6 +27,7 @@ export interface Team {
   className?: string; // Nome da turma (ex: "Turma A"). Também usado como nome de exibição da equipa.
   memberNames?: string[]; // Nomes dos concorrentes escalados (normalmente 5)
   registeredAt?: any; // Timestamp do momento em que o casting foi feito
+  castingWinnerName?: string; // Nome do concorrente que venceu a rodada de casting da turma (opcional)
 }
 
 export interface Question {

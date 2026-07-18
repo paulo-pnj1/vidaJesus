@@ -162,7 +162,7 @@ export async function addTeam(
   name: string,
   membersCount: number,
   ageCategory: AgeCategory,
-  extra?: { teacherName?: string; className?: string; memberNames?: string[] }
+  extra?: { teacherName?: string; className?: string; memberNames?: string[]; castingWinnerName?: string }
 ) {
   const id = `team_${Date.now()}`;
   const teamRef = doc(db, 'teams', id);
@@ -180,6 +180,7 @@ export async function addTeam(
     ...(extra?.teacherName ? { teacherName: extra.teacherName } : {}),
     ...(extra?.className ? { className: extra.className } : {}),
     ...(extra?.memberNames ? { memberNames: extra.memberNames } : {}),
+    ...(extra?.castingWinnerName ? { castingWinnerName: extra.castingWinnerName } : {}),
     ...(extra ? { registeredAt: Timestamp.now() } : {})
   };
   await setDoc(teamRef, newTeam);
@@ -190,17 +191,20 @@ export async function addTeam(
 // Wraps addTeam() with the exact shape the casting form collects: teacher name,
 // class ("turma") name, age category and the 5 competitor names. The turma name
 // is used as the team's display name everywhere else in the app (leaderboard,
-// projector, judge panel).
+// projector, judge panel). castingWinnerName is optional — filled in when the
+// teacher ran the live casting mini-quiz before registering.
 export async function registerCastingTeam(
   teacherName: string,
   className: string,
   ageCategory: AgeCategory,
-  memberNames: string[]
+  memberNames: string[],
+  castingWinnerName?: string
 ) {
   return addTeam(className, memberNames.length, ageCategory, {
     teacherName,
     className,
-    memberNames
+    memberNames,
+    ...(castingWinnerName ? { castingWinnerName } : {})
   });
 }
 
