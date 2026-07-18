@@ -83,6 +83,58 @@ export default function CastingPanel() {
   // with blank initial state) before we've had a chance to try restoring it.
   const hydratedRef = useRef(false);
 
+  // --- Same audio cues used on the Projector: question launched + correct/wrong answer ---
+  const questionLaunchSoundRef = useRef<HTMLAudioElement | null>(null);
+  const correctSoundRef = useRef<HTMLAudioElement | null>(null);
+  const wrongSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    questionLaunchSoundRef.current = new Audio('/audio/pergunta-lancada.mp3');
+    correctSoundRef.current = new Audio('/audio/resposta-certa.mp3');
+    wrongSoundRef.current = new Audio('/audio/resposta-errada.mp3');
+    questionLaunchSoundRef.current.preload = 'auto';
+    correctSoundRef.current.preload = 'auto';
+    wrongSoundRef.current.preload = 'auto';
+  }, []);
+
+  const playQuestionLaunchSound = () => {
+    try {
+      const audio = questionLaunchSoundRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {
+          // Autoplay blocked (needs a user gesture) or file missing - silently ignore
+        });
+      }
+    } catch (e) {
+      // Ignored if browser blocks audio
+    }
+  };
+
+  const playResultSound = (isCorrect: boolean) => {
+    // Stop the "pergunta lançada" music as soon as the result is known.
+    try {
+      const mainAudio = questionLaunchSoundRef.current;
+      if (mainAudio) {
+        mainAudio.pause();
+        mainAudio.currentTime = 0;
+      }
+    } catch (e) {
+      // Ignored if browser blocks audio
+    }
+    try {
+      const audio = isCorrect ? correctSoundRef.current : wrongSoundRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {
+          // Autoplay blocked or file missing - silently ignore
+        });
+      }
+    } catch (e) {
+      // Ignored if browser blocks audio
+    }
+  };
+
   useEffect(() => {
     if (sessionStorage.getItem(CASTING_AUTH_KEY) === 'true') {
       setAuthed(true);
@@ -237,6 +289,7 @@ export default function CastingPanel() {
     setSelectedOptionIdx(null);
     setChronoResult(null);
     setRevealed(false);
+    playQuestionLaunchSound();
   };
 
   // Builds a fresh casting session: picks `questionCount` random, unique
@@ -316,6 +369,7 @@ export default function CastingPanel() {
       };
     });
     setRevealed(true);
+    playResultSound(isCorrect);
   };
 
   const handleNextRound = () => {
