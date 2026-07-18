@@ -4,9 +4,10 @@ import { subscribeToGameState } from './lib/gameService';
 import PresenterPanel from './components/PresenterPanel';
 import ProjectorPanel from './components/ProjectorPanel';
 import JudgePanel from './components/JudgePanel';
-import { Tv, Gamepad2, Scale, BookOpen, Sparkles, ArrowRight, Lock, User, LogOut } from 'lucide-react';
+import CastingPanel from './components/CastingPanel';
+import { Tv, Gamepad2, Scale, BookOpen, Sparkles, ArrowRight, Lock, User, LogOut, ClipboardList } from 'lucide-react';
 
-type Role = 'presenter' | 'projector' | 'judge';
+type Role = 'presenter' | 'projector' | 'judge' | 'casting';
 
 // Hardcoded access credentials for the protected panels.
 // Note: this is a simple front-end gate for a live event, not a real security boundary.
@@ -24,7 +25,7 @@ function authKey(r: 'presenter' | 'judge') {
 }
 
 function isAuthenticated(r: Role): boolean {
-  if (r === 'projector') return true;
+  if (r === 'projector' || r === 'casting') return true;
   return localStorage.getItem(authKey(r)) === 'true';
 }
 
@@ -54,9 +55,11 @@ export default function App() {
       applyRole('projector');
     } else if (hash === '#judge') {
       applyRole('judge');
+    } else if (hash === '#casting') {
+      applyRole('casting');
     } else {
       const savedRole = localStorage.getItem('bible_game_role') as Role | null;
-      if (savedRole && ['presenter', 'projector', 'judge'].includes(savedRole)) {
+      if (savedRole && ['presenter', 'projector', 'judge', 'casting'].includes(savedRole)) {
         applyRole(savedRole);
       }
     }
@@ -70,6 +73,8 @@ export default function App() {
         applyRole('projector');
       } else if (currentHash === '#judge') {
         applyRole('judge');
+      } else if (currentHash === '#casting') {
+        applyRole('casting');
       }
     };
 
@@ -235,6 +240,8 @@ export default function App() {
         return <ProjectorPanel gameState={gameState} />;
       case 'judge':
         return <JudgePanel />;
+      case 'casting':
+        return <CastingPanel />;
       default:
         // Selection Screen
         return (
@@ -259,8 +266,34 @@ export default function App() {
               </div>
 
               {/* Roles Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                {/* 0. Casting Card */}
+                <div
+                  id="role-casting-btn"
+                  onClick={() => handleSelectRole('casting')}
+                  className="group bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-indigo-500/50 rounded-3xl p-6 flex flex-col justify-between space-y-6 transition-all duration-300 shadow-xl cursor-pointer hover:shadow-indigo-500/5"
+                >
+                  <div className="space-y-4">
+                    <div className="w-12 h-12 bg-indigo-500/10 group-hover:bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center border border-indigo-500/20 transition-all">
+                      <ClipboardList className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h3 className="text-xl font-bold text-display text-white group-hover:text-indigo-400 transition-colors">
+                        Casting
+                      </h3>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Painel para os professores. Escolha a categoria da turma (Júnior, Pleno ou Sénior) e inscreva o nome dos 5 concorrentes.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs font-bold text-indigo-400 group-hover:translate-x-1 transition-transform">
+                    <span>Inscrever Turma</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </div>
+                </div>
+
                 {/* 1. Presenter Card */}
                 <div 
                   id="role-presenter-btn"

@@ -22,6 +22,11 @@ export interface Team {
   correctAnswerTimeMs?: number; // Sum of response times ONLY for correct answers ("Tempo Total de Acertos")
   lastAnsweredAt?: any; // Timestamp
   membersAnswered?: string[]; // Names of members who have answered in the current rotation
+  // --- Casting / registration fields (filled in by the teacher during casting) ---
+  teacherName?: string; // Nome do professor(a) responsável pela turma
+  className?: string; // Nome da turma (ex: "Turma A"). Também usado como nome de exibição da equipa.
+  memberNames?: string[]; // Nomes dos concorrentes escalados (normalmente 5)
+  registeredAt?: any; // Timestamp do momento em que o casting foi feito
 }
 
 export interface Question {

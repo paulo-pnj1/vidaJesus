@@ -9,11 +9,13 @@ import {
   deleteTeam, 
   submitAnswer, 
   resetGame,
-  seedQuestionsIfEmpty
+  seedQuestionsIfEmpty,
+  groupTeamsByCategory
 } from '../lib/gameService';
 import { 
   Users, Play, RotateCcw, AlertTriangle, Plus, Trash2, Database, HelpCircle, 
-  Check, X, ChevronRight, Shuffle, Timer, Eye, HelpCircle as HelpIcon, ShieldAlert, BookOpen 
+  Check, X, ChevronRight, Shuffle, Timer, Eye, HelpCircle as HelpIcon, ShieldAlert, BookOpen,
+  Trophy, GraduationCap
 } from 'lucide-react';
 import DatabaseAdmin from './DatabaseAdmin';
 
@@ -448,6 +450,13 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                 </div>
               )}
 
+              <div className="flex items-start gap-2 p-3 rounded-xl border border-indigo-200 bg-indigo-50/60 text-indigo-700 text-xs">
+                <GraduationCap className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <p>
+                  Dica: envie aos professores o link com <code className="bg-indigo-100 px-1 py-0.5 rounded font-mono">#casting</code> para que cada um inscreva a sua turma diretamente (nome do professor, turma, categoria e os 5 concorrentes). As equipas inscritas aparecem aqui automaticamente. Também pode adicionar equipas manualmente abaixo.
+                </p>
+              </div>
+
               {/* Add Team form */}
               <form onSubmit={handleAddTeam} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div className="md:col-span-5">
@@ -521,7 +530,13 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                               {AGE_CATEGORY_LABELS[t.ageCategory]}
                             </span>
                           </h4>
-                          <p className="text-[11px] text-slate-500">{t.membersCount} Integrantes</p>
+                          <p className="text-[11px] text-slate-500">
+                            {t.membersCount} Integrantes
+                            {t.teacherName && <span> • Prof. {t.teacherName}</span>}
+                          </p>
+                          {t.memberNames && t.memberNames.length > 0 && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">{t.memberNames.join(', ')}</p>
+                          )}
                         </div>
                       </div>
                       <button
@@ -613,6 +628,62 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   </div>
                 )}
               </div>
+
+              {/* RESULTADOS FINAIS — vencedores por categoria e por turma */}
+              {gameState.status === 'finished' && (
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+                  <h3 className="text-lg font-bold text-slate-800 text-display border-b pb-2 flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-amber-500" />
+                    Resultados Finais — Vencedores por Categoria
+                  </h3>
+
+                  {groupTeamsByCategory(teams).length === 0 ? (
+                    <p className="text-sm text-slate-400 italic">Nenhuma equipa registada.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                      {groupTeamsByCategory(teams).map(({ category, teams: catTeams }) => (
+                        <div key={category} className="rounded-2xl border border-slate-200 overflow-hidden">
+                          <div className={`px-4 py-3 font-black text-display text-sm uppercase tracking-wide ${
+                            category === 'junior' ? 'bg-sky-50 text-sky-700' :
+                            category === 'senior' ? 'bg-purple-50 text-purple-700' :
+                            'bg-emerald-50 text-emerald-700'
+                          }`}>
+                            {AGE_CATEGORY_LABELS[category]}
+                          </div>
+                          <div className="divide-y divide-slate-100">
+                            {catTeams.map((t, idx) => (
+                              <div key={t.id} className={`p-3.5 flex items-center justify-between gap-3 ${idx === 0 ? 'bg-amber-50/60' : ''}`}>
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className={`w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-black ${
+                                    idx === 0 ? 'bg-amber-400 text-slate-950' : 'bg-slate-100 text-slate-500'
+                                  }`}>
+                                    {idx === 0 ? <Trophy className="w-3.5 h-3.5" /> : idx + 1}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-slate-800 truncate flex items-center gap-1.5">
+                                      {t.className || t.name}
+                                      {idx === 0 && <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">Vencedor</span>}
+                                    </p>
+                                    {t.teacherName && (
+                                      <p className="text-[10px] text-slate-400 truncate flex items-center gap-1">
+                                        <GraduationCap className="w-3 h-3" /> {t.teacherName}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="text-sm font-black text-slate-800">{t.score} pts</p>
+                                  <p className="text-[10px] text-slate-400">{t.correct} certas / {t.wrong} erradas</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* QUESTION SELECTOR & CONTROLS */}
               {gameState.status === 'waiting' && activeTeam && (

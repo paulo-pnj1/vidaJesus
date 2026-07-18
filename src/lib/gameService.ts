@@ -158,7 +158,12 @@ export function subscribeToAnswers(onUpdate: (answers: Answer[]) => void) {
 }
 
 // 10. Add Team
-export async function addTeam(name: string, membersCount: number, ageCategory: AgeCategory) {
+export async function addTeam(
+  name: string,
+  membersCount: number,
+  ageCategory: AgeCategory,
+  extra?: { teacherName?: string; className?: string; memberNames?: string[] }
+) {
   const id = `team_${Date.now()}`;
   const teamRef = doc(db, 'teams', id);
   const newTeam: Team = {
@@ -171,9 +176,32 @@ export async function addTeam(name: string, membersCount: number, ageCategory: A
     wrong: 0,
     totalAnswerTimeMs: 0,
     correctAnswerTimeMs: 0,
-    membersAnswered: []
+    membersAnswered: [],
+    ...(extra?.teacherName ? { teacherName: extra.teacherName } : {}),
+    ...(extra?.className ? { className: extra.className } : {}),
+    ...(extra?.memberNames ? { memberNames: extra.memberNames } : {}),
+    ...(extra ? { registeredAt: Timestamp.now() } : {})
   };
   await setDoc(teamRef, newTeam);
+  return id;
+}
+
+// 19. Register a Casting Team (used by the teacher self-service Casting Panel).
+// Wraps addTeam() with the exact shape the casting form collects: teacher name,
+// class ("turma") name, age category and the 5 competitor names. The turma name
+// is used as the team's display name everywhere else in the app (leaderboard,
+// projector, judge panel).
+export async function registerCastingTeam(
+  teacherName: string,
+  className: string,
+  ageCategory: AgeCategory,
+  memberNames: string[]
+) {
+  return addTeam(className, memberNames.length, ageCategory, {
+    teacherName,
+    className,
+    memberNames
+  });
 }
 
 // 11. Delete Team

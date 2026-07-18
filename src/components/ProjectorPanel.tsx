@@ -298,8 +298,11 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
                   <div className="space-y-1.5">
                     <p className="text-[10px] uppercase font-extrabold tracking-widest text-blue-400">Faixa {AGE_CATEGORY_LABELS[category]}</p>
                     <h2 className="text-3xl font-black tracking-tight text-display text-white">
-                      {winner.name}
+                      {winner.className || winner.name}
                     </h2>
+                    {winner.teacherName && (
+                      <p className="text-xs text-slate-400">Prof. {winner.teacherName}</p>
+                    )}
                   </div>
                 </div>
               ))}
