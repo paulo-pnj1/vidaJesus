@@ -226,30 +226,6 @@ export default function CastingPanel() {
     return null;
   };
 
-  // Register the turma directly (no casting round) — kept as a quick fallback.
-  const handleDirectRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    const validationError = validateBasics();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await registerCastingTeam(teacherName.trim(), className.trim(), category as AgeCategory, members.map((m) => m.trim()));
-      setSuccess(`Turma "${className.trim()}" inscrita com sucesso na categoria ${AGE_CATEGORY_LABELS[category as AgeCategory]}!`);
-      resetForm();
-      localStorage.removeItem(CASTING_SESSION_KEY);
-    } catch (err) {
-      console.error(err);
-      setError('Ocorreu um erro ao gravar a inscrição. Tente novamente.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const prepareRound = (idx: number, pool: Question[]) => {
     const q = pool[idx];
     if (!q) return;
@@ -373,16 +349,19 @@ export default function CastingPanel() {
   const handleRegisterAfterCasting = async () => {
     setError(null);
     setSuccess(null);
+    if (!winner) return;
     setSubmitting(true);
     try {
+      // Only the casting winner advances to the final contest — the turma's
+      // team is registered with a single competitor, not all 5 candidates.
       await registerCastingTeam(
         teacherName.trim(),
         className.trim(),
         category as AgeCategory,
-        members.map((m) => m.trim()),
-        winner?.name
+        [winner.name],
+        winner.name
       );
-      setSuccess(`Turma "${className.trim()}" inscrita com sucesso! Vencedor(a) do casting: ${winner?.name}.`);
+      setSuccess(`Turma "${className.trim()}" inscrita no concurso final com "${winner.name}" como representante (vencedor(a) do casting).`);
       resetForm();
       resetCastingSession();
       setStage('form');
@@ -672,7 +651,7 @@ export default function CastingPanel() {
               className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-xl font-bold shadow-md transition-all text-display flex items-center justify-center gap-2 text-sm cursor-pointer"
             >
               <GraduationCap className="w-4 h-4" />
-              {submitting ? 'A inscrever...' : 'Inscrever Turma com Este Resultado'}
+              {submitting ? 'A inscrever...' : `Inscrever ${winner?.name || 'Vencedor(a)'} no Concurso Final`}
             </button>
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -814,7 +793,8 @@ export default function CastingPanel() {
           </h3>
           <p className="text-xs text-slate-500">
             As perguntas e opções aparecem aqui mesmo, uma pergunta por rodada, passando de aluno em aluno até acabar.
-            No final, o concorrente com mais pontos é o vencedor do casting da turma. Não é preciso ir à tela do apresentador — essa é só para o concurso final.
+            No final, o concorrente com mais pontos é o vencedor do casting — e é <strong>só ele(a)</strong> que fica inscrito(a) para representar a turma no concurso final.
+            Não é preciso ir à tela do apresentador — essa é só para o concurso final.
           </p>
 
           <div className="max-w-xs">
@@ -852,16 +832,6 @@ export default function CastingPanel() {
           >
             <Play className="w-4 h-4" />
             Iniciar Casting ao Vivo
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDirectRegister}
-            disabled={submitting}
-            className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-600 rounded-xl font-semibold transition-all text-xs flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <GraduationCap className="w-3.5 h-3.5" />
-            {submitting ? 'A inscrever...' : 'Ou inscrever a turma diretamente, sem casting'}
           </button>
         </div>
 
