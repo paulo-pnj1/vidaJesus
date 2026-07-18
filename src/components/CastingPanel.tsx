@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AgeCategory, AGE_CATEGORIES, AGE_CATEGORY_LABELS, Team, Question } from '../types';
 import { subscribeToTeams, subscribeToQuestions, registerCastingTeam } from '../lib/gameService';
 import {
   Users, GraduationCap, CheckCircle2, Lock, ClipboardList, Trophy, Sparkles,
-  Play, Eye, ChevronRight, RotateCcw, Medal, Check, X as XIcon, ArrowLeft, ListChecks
+  Play, Eye, ChevronRight, RotateCcw, Medal, Check, X as XIcon, ArrowLeft, ListChecks, Save
 } from 'lucide-react';
 
 // Simple front-end gate so a stray link doesn't get spammed by strangers.
@@ -11,6 +11,12 @@ import {
 // just a shared word the teachers are given verbally/on a poster on casting day.
 const CASTING_ACCESS_CODE = 'elenco2026';
 const CASTING_AUTH_KEY = 'bible_game_casting_auth';
+
+// Key used to persist an in-progress casting session to localStorage, so an
+// accidental refresh/back button/tab close doesn't wipe out live progress
+// (round, scores, etc). localStorage (not sessionStorage) is used on purpose:
+// it survives the tab being closed entirely, not just a reload.
+const CASTING_SESSION_KEY = 'bible_game_casting_session_v1';
 
 const CATEGORY_INFO: Record<AgeCategory, { range: string; level: string; color: string; ring: string; bg: string }> = {
   junior: { range: '6 a 9 anos', level: 'Perguntas fáceis', color: 'text-sky-600', ring: 'ring-sky-400', bg: 'bg-sky-50 border-sky-200' },
@@ -27,6 +33,23 @@ interface StudentScore {
   points: number;
   correct: number;
   wrong: number;
+}
+
+interface PersistedCastingSession {
+  category: AgeCategory | null;
+  teacherName: string;
+  className: string;
+  members: string[];
+  questionCount: number;
+  stage: CastingStage;
+  sessionQuestions: Question[];
+  roundIndex: number;
+  currentOptions: string[];
+  selectedOptionIdx: number | null;
+  chronoResult: boolean | null;
+  revealed: boolean;
+  scores: Record<string, StudentScore>;
+  savedAt: number;
 }
 
 export default function CastingPanel() {
@@ -54,6 +77,11 @@ export default function CastingPanel() {
   const [chronoResult, setChronoResult] = useState<boolean | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [scores, setScores] = useState<Record<string, StudentScore>>({});
+  const [restoredNotice, setRestoredNotice] = useState(false);
+
+  // Guards the save-effect below from firing (and overwriting a saved session
+  // with blank initial state) before we've had a chance to try restoring it.
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
     if (sessionStorage.getItem(CASTING_AUTH_KEY) === 'true') {
@@ -70,6 +98,77 @@ export default function CastingPanel() {
     const unsubscribe = subscribeToQuestions(setQuestions);
     return () => unsubscribe();
   }, []);
+
+  // Try to restore an in-progress casting session that never finished
+  // (e.g. the page was refreshed or closed by accident mid-round).
+  useEffect(() => {
+    if (!authed) return;
+    try {
+      const raw = localStorage.getItem(CASTING_SESSION_KEY);
+      if (raw) {
+        const saved: PersistedCastingSession = JSON.parse(raw);
+        const hasProgress =
+          saved.stage !== 'form' ||
+          !!saved.teacherName ||
+          !!saved.className ||
+          (saved.members || []).some((m) => m);
+        if (hasProgress) {
+          const label = saved.className ? `da turma "${saved.className}"` : '';
+          const wantsToResume = window.confirm(
+            `Encontrámos um casting ${label} que ficou em aberto (a tela deve ter fechado ou recarregado sem terminar). Deseja continuar de onde parou?`
+          );
+          if (wantsToResume) {
+            setCategory(saved.category);
+            setTeacherName(saved.teacherName || '');
+            setClassName(saved.className || '');
+            setMembers(saved.members?.length === COMPETITOR_COUNT ? saved.members : Array(COMPETITOR_COUNT).fill(''));
+            setQuestionCount(saved.questionCount || DEFAULT_CASTING_QUESTIONS);
+            setSessionQuestions(saved.sessionQuestions || []);
+            setRoundIndex(saved.roundIndex || 0);
+            setCurrentOptions(saved.currentOptions || []);
+            setSelectedOptionIdx(saved.selectedOptionIdx ?? null);
+            setChronoResult(saved.chronoResult ?? null);
+            setRevealed(saved.revealed || false);
+            setScores(saved.scores || {});
+            setStage(saved.stage || 'form');
+            setRestoredNotice(true);
+          } else {
+            localStorage.removeItem(CASTING_SESSION_KEY);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao restaurar sessão de casting salva:', err);
+    } finally {
+      hydratedRef.current = true;
+    }
+    // Only runs once, right after the teacher unlocks the panel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed]);
+
+  // Auto-save the in-progress casting session to this browser after every
+  // change, so an accidental refresh/close doesn't lose the teacher's work.
+  useEffect(() => {
+    if (!authed || !hydratedRef.current) return;
+    const isEmpty = stage === 'form' && !teacherName && !className && !category && members.every((m) => !m);
+    if (isEmpty) {
+      localStorage.removeItem(CASTING_SESSION_KEY);
+      return;
+    }
+    const payload: PersistedCastingSession = {
+      category, teacherName, className, members, questionCount,
+      stage, sessionQuestions, roundIndex, currentOptions, selectedOptionIdx, chronoResult, revealed, scores,
+      savedAt: Date.now()
+    };
+    try {
+      localStorage.setItem(CASTING_SESSION_KEY, JSON.stringify(payload));
+    } catch (err) {
+      console.error('Erro ao gravar progresso do casting:', err);
+    }
+  }, [
+    authed, category, teacherName, className, members, questionCount,
+    stage, sessionQuestions, roundIndex, currentOptions, selectedOptionIdx, chronoResult, revealed, scores
+  ]);
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,6 +241,7 @@ export default function CastingPanel() {
       await registerCastingTeam(teacherName.trim(), className.trim(), category as AgeCategory, members.map((m) => m.trim()));
       setSuccess(`Turma "${className.trim()}" inscrita com sucesso na categoria ${AGE_CATEGORY_LABELS[category as AgeCategory]}!`);
       resetForm();
+      localStorage.removeItem(CASTING_SESSION_KEY);
     } catch (err) {
       console.error(err);
       setError('Ocorreu um erro ao gravar a inscrição. Tente novamente.');
@@ -256,6 +356,7 @@ export default function CastingPanel() {
     if (window.confirm('Cancelar o casting em curso? O progresso desta sessão será perdido (os dados da turma preenchidos permanecem).')) {
       resetCastingSession();
       setStage('form');
+      localStorage.removeItem(CASTING_SESSION_KEY);
     }
   };
 
@@ -285,6 +386,7 @@ export default function CastingPanel() {
       resetForm();
       resetCastingSession();
       setStage('form');
+      localStorage.removeItem(CASTING_SESSION_KEY);
     } catch (err) {
       console.error(err);
       setError('Ocorreu um erro ao gravar a inscrição. Tente novamente.');
@@ -296,6 +398,7 @@ export default function CastingPanel() {
   const handleDiscardResults = () => {
     resetCastingSession();
     setStage('form');
+    localStorage.removeItem(CASTING_SESSION_KEY);
   };
 
   // Lock screen
@@ -351,6 +454,12 @@ export default function CastingPanel() {
     return (
       <div className="min-h-screen bg-slate-950 font-sans pb-16 text-white">
         <div className="max-w-3xl mx-auto p-6 space-y-6">
+          {restoredNotice && (
+            <div className="flex items-center justify-between gap-3 bg-indigo-500/15 border border-indigo-400/30 rounded-xl px-4 py-2.5 text-xs text-indigo-200">
+              <span>Sessão de casting restaurada de onde parou.</span>
+              <button onClick={() => setRestoredNotice(false)} className="font-bold hover:text-white cursor-pointer">Ok</button>
+            </div>
+          )}
           {/* Top bar */}
           <div className="flex items-center justify-between">
             <button
@@ -359,9 +468,14 @@ export default function CastingPanel() {
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Cancelar Casting
             </button>
-            <span className="text-xs font-bold bg-white/10 px-3 py-1.5 rounded-full">
-              Rodada {roundIndex + 1} / {sessionQuestions.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1 text-[10px] text-slate-500" title="O progresso é gravado automaticamente neste navegador">
+                <Save className="w-3 h-3" /> Salvo automaticamente
+              </span>
+              <span className="text-xs font-bold bg-white/10 px-3 py-1.5 rounded-full">
+                Rodada {roundIndex + 1} / {sessionQuestions.length}
+              </span>
+            </div>
           </div>
 
           {/* Progress bar */}
@@ -510,6 +624,12 @@ export default function CastingPanel() {
     return (
       <div className="min-h-screen bg-slate-950 font-sans pb-16 text-white flex items-center justify-center p-6">
         <div className="max-w-lg w-full space-y-6">
+          {restoredNotice && (
+            <div className="flex items-center justify-between gap-3 bg-indigo-500/15 border border-indigo-400/30 rounded-xl px-4 py-2.5 text-xs text-indigo-200">
+              <span>Sessão de casting restaurada de onde parou.</span>
+              <button onClick={() => setRestoredNotice(false)} className="font-bold hover:text-white cursor-pointer">Ok</button>
+            </div>
+          )}
           <div className="text-center space-y-2">
             <Trophy className="w-14 h-14 text-amber-400 mx-auto" />
             <p className={`text-xs font-black uppercase tracking-widest ${info.color}`}>
@@ -593,6 +713,13 @@ export default function CastingPanel() {
       </div>
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
+
+        {restoredNotice && (
+          <div className="flex items-center justify-between gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 text-xs text-indigo-700">
+            <span>Dados restaurados de uma sessão anterior que não tinha sido terminada.</span>
+            <button onClick={() => setRestoredNotice(false)} className="font-bold hover:text-indigo-900 cursor-pointer">Ok</button>
+          </div>
+        )}
 
         {/* Step 1: category */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
