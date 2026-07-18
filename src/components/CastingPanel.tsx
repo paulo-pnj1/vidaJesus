@@ -3,11 +3,12 @@ import { AgeCategory, AGE_CATEGORIES, AGE_CATEGORY_LABELS, Team, Question } from
 import { subscribeToTeams, subscribeToQuestions, registerCastingTeam } from '../lib/gameService';
 import {
   Users, GraduationCap, CheckCircle2, Lock, ClipboardList, Trophy, Sparkles,
-  Play, Eye, ChevronRight, RotateCcw, Medal, Check, X as XIcon, ArrowLeft, ListChecks, Save
+  Play, Eye, ChevronRight, RotateCcw, Medal, Check, X as XIcon, ArrowLeft, ListChecks, Save,
+  AlertTriangle
 } from 'lucide-react';
 
 // Simple front-end gate so a stray link doesn't get spammed by strangers.
-// Like the presenter/judge login, this is NOT a real security boundary -
+// Like the presenter/judge login, this is NOT a real security boundary —
 // just a shared word the teachers are given verbally/on a poster on casting day.
 const CASTING_ACCESS_CODE = 'elenco2026';
 const CASTING_AUTH_KEY = 'bible_game_casting_auth';
@@ -33,6 +34,26 @@ interface StudentScore {
   points: number;
   correct: number;
   wrong: number;
+}
+
+// One "sudden death" tie-break round: a single extra question asked only to
+// the students who are tied for 1st place. Whoever answers correctly (and is
+// the only one to do so) wins; if 0 or 2+ get it right, another round runs
+// among the relevant subset until a single winner emerges.
+interface TiebreakAnswer {
+  idx: number | null;
+  chrono: boolean | null;
+}
+
+interface TiebreakState {
+  question: Question;
+  options: string[]; // shuffled display options (empty for chronological)
+  candidates: string[]; // student names still competing in this round
+  turnIdx: number; // index into candidates for whose turn it is; === candidates.length once everyone answered
+  answers: Record<string, TiebreakAnswer>;
+  revealed: boolean;
+  roundNum: number;
+  resolvedWinner: string | null;
 }
 
 interface PersistedCastingSession {
@@ -78,6 +99,8 @@ export default function CastingPanel() {
   const [revealed, setRevealed] = useState(false);
   const [scores, setScores] = useState<Record<string, StudentScore>>({});
   const [restoredNotice, setRestoredNotice] = useState(false);
+  const [tiebreak, setTiebreak] = useState<TiebreakState | null>(null);
+  const tiebreakUsedIdsRef = useRef<string[]>([]);
 
   // Guards the save-effect below from firing (and overwriting a saved session
   // with blank initial state) before we've had a chance to try restoring it.
@@ -249,6 +272,8 @@ export default function CastingPanel() {
     setChronoResult(null);
     setRevealed(false);
     setScores({});
+    setTiebreak(null);
+    tiebreakUsedIdsRef.current = [];
   };
 
   const handleMemberChange = (idx: number, value: string) => {
@@ -292,9 +317,14 @@ export default function CastingPanel() {
     playQuestionLaunchSound();
   };
 
-  // Builds a fresh casting session: picks `questionCount` random, unique
-  // questions from the chosen category (does NOT touch the `used` flag -
-  // casting never affects the pool available for the final contest).
+  // Builds a fresh casting session. `questionCount` means questions PER
+  // STUDENT: every one of the COMPETITOR_COUNT students answers that many
+  // rounds, and every question used in the whole session is unique (no
+  // repeats for any student, and no student ever hears a question a
+  // teammate already got). Students take turns round-robin: round 1 goes
+  // student 1 → student 2 → ... → student 5, then round 2 repeats, etc.
+  // Casting never touches the `used` flag — it doesn't affect the pool
+  // available for the final contest.
   const buildAndStartSession = () => {
     setError(null);
     setSuccess(null);
@@ -304,14 +334,18 @@ export default function CastingPanel() {
       return;
     }
     const pool = questions.filter((q) => q.ageCategory === category);
-    if (pool.length === 0) {
-      setError(`Não há perguntas cadastradas para a categoria ${AGE_CATEGORY_LABELS[category as AgeCategory]}. Adicione perguntas no Banco de Perguntas antes de iniciar o casting.`);
+    if (pool.length < COMPETITOR_COUNT) {
+      setError(`É preciso pelo menos ${COMPETITOR_COUNT} perguntas cadastradas na categoria ${AGE_CATEGORY_LABELS[category as AgeCategory]} (uma para cada concorrente por rodada). Atualmente há ${pool.length}. Adicione mais perguntas no Banco de Perguntas.`);
       return;
     }
-    const desired = Math.max(1, Math.floor(questionCount) || DEFAULT_CASTING_QUESTIONS);
+
+    const desiredPerStudent = Math.max(1, Math.floor(questionCount) || DEFAULT_CASTING_QUESTIONS);
+    const maxPerStudent = Math.floor(pool.length / COMPETITOR_COUNT);
+    const actualPerStudent = Math.min(desiredPerStudent, maxPerStudent);
+    const totalNeeded = actualPerStudent * COMPETITOR_COUNT;
+
     const shuffledPool = [...pool].sort(() => Math.random() - 0.5);
-    const n = Math.min(desired, shuffledPool.length);
-    const picked = shuffledPool.slice(0, n);
+    const picked = shuffledPool.slice(0, totalNeeded);
 
     resetCastingSession();
     setSessionQuestions(picked);
@@ -319,10 +353,11 @@ export default function CastingPanel() {
     setStage('running');
     prepareRound(0, picked);
 
-    if (n < desired) {
-      // Doesn't block the flow - just lets the teacher know fewer questions were used.
+    if (actualPerStudent < desiredPerStudent) {
+      // Doesn't block the flow — just lets the teacher know fewer rounds were used,
+      // so that every student still answers the same number of unique questions.
       window.setTimeout(() => {
-        alert(`Só havia ${n} pergunta(s) disponível(is) na categoria ${AGE_CATEGORY_LABELS[category as AgeCategory]}. O casting vai usar essa quantidade.`);
+        alert(`Só havia perguntas suficientes na categoria ${AGE_CATEGORY_LABELS[category as AgeCategory]} para ${actualPerStudent} pergunta(s) por aluno (em vez das ${desiredPerStudent} pedidas), garantindo que nenhuma pergunta se repete.`);
       }, 0);
     }
   };
@@ -382,6 +417,90 @@ export default function CastingPanel() {
     prepareRound(next, sessionQuestions);
   };
 
+  // Picks a question for a tie-break round: prefers one that hasn't been
+  // used yet in this session (main rounds or earlier tie-break rounds), but
+  // falls back to reusing one if the category's pool has been exhausted.
+  const pickTiebreakQuestion = (): Question | null => {
+    const pool = questions.filter((q) => q.ageCategory === category);
+    if (pool.length === 0) return null;
+    const excludeIds = [...sessionQuestions.map((q) => q.id), ...tiebreakUsedIdsRef.current];
+    const fresh = pool.filter((q) => !excludeIds.includes(q.id));
+    const source = fresh.length > 0 ? fresh : pool;
+    return source[Math.floor(Math.random() * source.length)];
+  };
+
+  const startTiebreakRound = (candidates: string[], roundNum: number) => {
+    const q = pickTiebreakQuestion();
+    if (!q) {
+      alert('Não há perguntas cadastradas nesta categoria para gerar uma pergunta de desempate. Escolha o vencedor manualmente combinando com a organização.');
+      return;
+    }
+    tiebreakUsedIdsRef.current.push(q.id);
+    const opts = q.type !== 'chronological' ? [...q.options].sort(() => Math.random() - 0.5) : [];
+    setTiebreak({
+      question: q,
+      options: opts,
+      candidates,
+      turnIdx: 0,
+      answers: {},
+      revealed: false,
+      roundNum,
+      resolvedWinner: null,
+    });
+    playQuestionLaunchSound();
+  };
+
+  const handleTiebreakSelect = (idx: number) => {
+    if (!tiebreak || tiebreak.revealed || tiebreak.turnIdx >= tiebreak.candidates.length) return;
+    const current = tiebreak.candidates[tiebreak.turnIdx];
+    setTiebreak((prev) => prev && ({ ...prev, answers: { ...prev.answers, [current]: { idx, chrono: null } } }));
+  };
+
+  const handleTiebreakChrono = (val: boolean) => {
+    if (!tiebreak || tiebreak.revealed || tiebreak.turnIdx >= tiebreak.candidates.length) return;
+    const current = tiebreak.candidates[tiebreak.turnIdx];
+    setTiebreak((prev) => prev && ({ ...prev, answers: { ...prev.answers, [current]: { idx: null, chrono: val } } }));
+  };
+
+  const handleTiebreakConfirmTurn = () => {
+    if (!tiebreak) return;
+    const current = tiebreak.candidates[tiebreak.turnIdx];
+    const ans = tiebreak.answers[current];
+    const answered = tiebreak.question.type === 'chronological'
+      ? ans?.chrono !== null && ans?.chrono !== undefined
+      : ans?.idx !== null && ans?.idx !== undefined;
+    if (!answered) {
+      alert(`Indique a resposta de ${current} antes de avançar.`);
+      return;
+    }
+    setTiebreak((prev) => prev && ({ ...prev, turnIdx: prev.turnIdx + 1 }));
+  };
+
+  const handleTiebreakReveal = () => {
+    if (!tiebreak) return;
+    const q = tiebreak.question;
+    const correctCandidates = tiebreak.candidates.filter((name) => {
+      const ans = tiebreak.answers[name];
+      return q.type === 'chronological' ? ans?.chrono === true : ans?.idx === q.correctAnswer;
+    });
+    const resolvedWinner = correctCandidates.length === 1 ? correctCandidates[0] : null;
+    playResultSound(!!resolvedWinner);
+    setTiebreak((prev) => prev && ({ ...prev, revealed: true, resolvedWinner }));
+  };
+
+  const handleNextTiebreakRound = () => {
+    if (!tiebreak) return;
+    const q = tiebreak.question;
+    const correctCandidates = tiebreak.candidates.filter((name) => {
+      const ans = tiebreak.answers[name];
+      return q.type === 'chronological' ? ans?.chrono === true : ans?.idx === q.correctAnswer;
+    });
+    // Nobody got it right → everyone stays in and tries a new question.
+    // Two or more got it right → only they compete in the next round.
+    const nextCandidates = correctCandidates.length > 0 ? correctCandidates : tiebreak.candidates;
+    startTiebreakRound(nextCandidates, tiebreak.roundNum + 1);
+  };
+
   const handleCancelCasting = () => {
     if (window.confirm('Cancelar o casting em curso? O progresso desta sessão será perdido (os dados da turma preenchidos permanecem).')) {
       resetCastingSession();
@@ -395,27 +514,43 @@ export default function CastingPanel() {
     buildAndStartSession();
   };
 
+  // Ranking criteria (in order): 1) mais pontos, 2) mais acertos, 3) menos erros.
+  // If those three are still tied for 1st place, a sudden-death tie-break
+  // question (below) decides the final winner.
   const ranking = members
     .map((name) => ({ name, ...(scores[name] || { points: 0, correct: 0, wrong: 0 }) }))
     .sort((a, b) => b.points - a.points || b.correct - a.correct || a.wrong - b.wrong);
-  const winner = ranking[0];
+  const topEntry = ranking[0];
+  const tiedForFirst = topEntry
+    ? ranking
+        .filter((r) => r.points === topEntry.points && r.correct === topEntry.correct && r.wrong === topEntry.wrong)
+        .map((r) => r.name)
+    : [];
+  const hasUnresolvedTie = tiedForFirst.length > 1 && !tiebreak?.resolvedWinner;
+  const championName = tiebreak?.resolvedWinner || (tiedForFirst.length > 1 ? null : topEntry?.name) || null;
+  const winner = championName ? ranking.find((r) => r.name === championName) : topEntry;
 
   const handleRegisterAfterCasting = async () => {
     setError(null);
     setSuccess(null);
-    if (!winner) return;
+    if (!championName) {
+      if (hasUnresolvedTie) {
+        setError('Ainda há um empate em 1º lugar por resolver. Complete a pergunta de desempate antes de inscrever a turma.');
+      }
+      return;
+    }
     setSubmitting(true);
     try {
-      // Only the casting winner advances to the final contest - the turma's
+      // Only the casting winner advances to the final contest — the turma's
       // team is registered with a single competitor, not all 5 candidates.
       await registerCastingTeam(
         teacherName.trim(),
         className.trim(),
         category as AgeCategory,
-        [winner.name],
-        winner.name
+        [championName],
+        championName
       );
-      setSuccess(`Turma "${className.trim()}" inscrita no concurso final com "${winner.name}" como representante (vencedor(a) do casting).`);
+      setSuccess(`Turma "${className.trim()}" inscrita no concurso final com "${championName}" como representante (vencedor(a) do casting).`);
       resetForm();
       resetCastingSession();
       setStage('form');
@@ -479,11 +614,14 @@ export default function CastingPanel() {
   const registeredInCategory = (c: AgeCategory) => teams.filter((t) => t.ageCategory === c);
 
   // ---------------------------------------------------------------------
-  // RUNNING: the live casting quiz - question + options appear right here,
+  // RUNNING: the live casting quiz — question + options appear right here,
   // no need to go to the Presenter/Projector screens.
   // ---------------------------------------------------------------------
   if (stage === 'running' && currentQuestion) {
     const info = CATEGORY_INFO[category as AgeCategory];
+    const roundsPerStudent = Math.floor(sessionQuestions.length / COMPETITOR_COUNT) || 1;
+    const currentRoundNumber = Math.floor(roundIndex / COMPETITOR_COUNT) + 1;
+    const studentPosInRound = (roundIndex % COMPETITOR_COUNT) + 1;
     return (
       <div className="min-h-screen bg-slate-950 font-sans pb-16 text-white">
         <div className="max-w-3xl mx-auto p-6 space-y-6">
@@ -506,7 +644,7 @@ export default function CastingPanel() {
                 <Save className="w-3 h-3" /> Salvo automaticamente
               </span>
               <span className="text-xs font-bold bg-white/10 px-3 py-1.5 rounded-full">
-                Rodada {roundIndex + 1} / {sessionQuestions.length}
+                Rodada {currentRoundNumber} / {roundsPerStudent} • Aluno {studentPosInRound} / {COMPETITOR_COUNT}
               </span>
             </div>
           </div>
@@ -539,7 +677,7 @@ export default function CastingPanel() {
                     <li key={idx}>{opt}</li>
                   ))}
                 </ol>
-                <p className="text-xs text-slate-400 italic">O aluno disse a ordem em voz alta - indique se acertou:</p>
+                <p className="text-xs text-slate-400 italic">O aluno disse a ordem em voz alta — indique se acertou:</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -603,7 +741,7 @@ export default function CastingPanel() {
                   : 'bg-rose-50 border-rose-200 text-rose-700'
               }`}>
                 {(currentQuestion.type === 'chronological' ? chronoResult : selectedOptionIdx === currentQuestion.correctAnswer)
-                  ? `Resposta CORRETA - +${currentQuestion.points} pontos para ${currentStudent} ✔`
+                  ? `Resposta CORRETA — +${currentQuestion.points} pontos para ${currentStudent} ✔`
                   : `Resposta INCORRETA ✖`}
               </div>
             )}
@@ -668,8 +806,20 @@ export default function CastingPanel() {
             <p className={`text-xs font-black uppercase tracking-widest ${info.color}`}>
               {className} • {AGE_CATEGORY_LABELS[category as AgeCategory]}
             </p>
-            <h2 className="text-3xl font-black text-display">{winner?.name}</h2>
-            <p className="text-sm text-slate-400">venceu o casting com {winner?.points} pontos ({winner?.correct} acerto{winner?.correct === 1 ? '' : 's'})</p>
+            {championName ? (
+              <>
+                <h2 className="text-3xl font-black text-display">{championName}</h2>
+                <p className="text-sm text-slate-400">
+                  venceu o casting com {winner?.points} pontos ({winner?.correct} acerto{winner?.correct === 1 ? '' : 's'})
+                  {tiebreak?.resolvedWinner && ' — decidido na pergunta de desempate'}
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-black text-display text-amber-400">Empate em 1º lugar!</h2>
+                <p className="text-sm text-slate-400">Resolva a pergunta de desempate abaixo para definir o(a) representante da turma.</p>
+              </>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl p-5 text-slate-800 space-y-2 shadow-xl">
@@ -690,7 +840,142 @@ export default function CastingPanel() {
                 </div>
               </div>
             ))}
+            <p className="text-[10px] text-slate-400 pt-1 text-center">
+              Critério de desempate: 1º mais pontos, 2º mais acertos, 3º menos erros, 4º pergunta de desempate.
+            </p>
           </div>
+
+          {hasUnresolvedTie && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3 text-slate-800">
+              <p className="text-sm font-bold text-amber-700 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" /> Empate entre: {tiedForFirst.join(', ')}
+              </p>
+
+              {!tiebreak ? (
+                <button
+                  onClick={() => startTiebreakRound(tiedForFirst, 1)}
+                  className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-white rounded-xl text-sm font-bold cursor-pointer"
+                >
+                  Iniciar Pergunta de Desempate
+                </button>
+              ) : (
+                <div className="space-y-3 pt-1">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-amber-700">
+                    Desempate{tiebreak.roundNum > 1 ? ` — Rodada ${tiebreak.roundNum}` : ''} • {tiebreak.candidates.length} concorrente{tiebreak.candidates.length !== 1 ? 's' : ''} disputando
+                  </p>
+                  <div className="bg-white rounded-xl p-4 border border-slate-200 space-y-3">
+                    <p className="text-[11px] font-bold uppercase text-slate-400">{tiebreak.question.lesson}</p>
+                    <p className="text-sm font-bold text-slate-800">{tiebreak.question.question}</p>
+
+                    {tiebreak.turnIdx < tiebreak.candidates.length ? (
+                      <>
+                        <p className="text-xs text-indigo-600 font-bold">Vez de: {tiebreak.candidates[tiebreak.turnIdx]}</p>
+                        {tiebreak.question.type === 'chronological' ? (
+                          <div className="space-y-2">
+                            <ol className="list-decimal list-inside text-xs text-slate-600 bg-slate-50 rounded-lg p-3">
+                              {tiebreak.question.options.map((opt, idx) => (
+                                <li key={idx}>{opt}</li>
+                              ))}
+                            </ol>
+                            <p className="text-[11px] text-slate-400 italic">O aluno disse a ordem em voz alta — indique se acertou:</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={() => handleTiebreakChrono(true)}
+                                className={`py-2 rounded-lg border text-xs font-bold cursor-pointer ${
+                                  tiebreak.answers[tiebreak.candidates[tiebreak.turnIdx]]?.chrono === true
+                                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                                }`}
+                              >
+                                Ordem Correta
+                              </button>
+                              <button
+                                onClick={() => handleTiebreakChrono(false)}
+                                className={`py-2 rounded-lg border text-xs font-bold cursor-pointer ${
+                                  tiebreak.answers[tiebreak.candidates[tiebreak.turnIdx]]?.chrono === false
+                                    ? 'border-rose-500 bg-rose-50 text-rose-800'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                                }`}
+                              >
+                                Ordem Errada
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-[11px] text-slate-400 italic">Clique na opção que o aluno respondeu em voz alta:</p>
+                            <div className="grid grid-cols-1 gap-2">
+                              {tiebreak.options.map((opt, idx) => {
+                                const originalIdx = tiebreak.question.options.indexOf(opt);
+                                const currentAns = tiebreak.answers[tiebreak.candidates[tiebreak.turnIdx]];
+                                const isSelected = currentAns?.idx === originalIdx;
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => handleTiebreakSelect(originalIdx)}
+                                    className={`text-left px-3 py-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+                                      isSelected
+                                        ? 'border-indigo-500 bg-indigo-50 text-indigo-800'
+                                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    {String.fromCharCode(65 + idx)}) {opt}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        <button
+                          onClick={handleTiebreakConfirmTurn}
+                          className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          Confirmar resposta e avançar
+                        </button>
+                      </>
+                    ) : !tiebreak.revealed ? (
+                      <button
+                        onClick={handleTiebreakReveal}
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold cursor-pointer"
+                      >
+                        Revelar Resultado do Desempate
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-[11px] text-slate-500">
+                          {tiebreak.question.type === 'chronological'
+                            ? 'A ordem apresentada acima era a correta.'
+                            : `Resposta correta: ${tiebreak.question.options[tiebreak.question.correctAnswer]}`}
+                        </p>
+                        {tiebreak.candidates.map((name) => {
+                          const ans = tiebreak.answers[name];
+                          const correct = tiebreak.question.type === 'chronological'
+                            ? ans?.chrono === true
+                            : ans?.idx === tiebreak.question.correctAnswer;
+                          return (
+                            <div key={name} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${correct ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                              <span className="font-bold">{name}</span>
+                              <span>{correct ? 'Acertou ✔' : 'Errou ✖'}</span>
+                            </div>
+                          );
+                        })}
+                        {tiebreak.resolvedWinner ? (
+                          <p className="text-sm font-black text-emerald-700 text-center pt-1">🏆 {tiebreak.resolvedWinner} venceu o desempate!</p>
+                        ) : (
+                          <button
+                            onClick={handleNextTiebreakRound}
+                            className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-xs font-bold cursor-pointer"
+                          >
+                            Ainda empatado — Nova Pergunta de Desempate
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {error && (
             <p className="text-xs text-rose-300 font-semibold bg-rose-950/40 border border-rose-900/40 rounded-lg p-3">
@@ -701,11 +986,11 @@ export default function CastingPanel() {
           <div className="grid grid-cols-1 gap-3">
             <button
               onClick={handleRegisterAfterCasting}
-              disabled={submitting}
+              disabled={submitting || !championName}
               className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-xl font-bold shadow-md transition-all text-display flex items-center justify-center gap-2 text-sm cursor-pointer"
             >
               <GraduationCap className="w-4 h-4" />
-              {submitting ? 'A inscrever...' : `Inscrever ${winner?.name || 'Vencedor(a)'} no Concurso Final`}
+              {submitting ? 'A inscrever...' : `Inscrever ${championName || 'Vencedor(a)'} no Concurso Final`}
             </button>
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -740,7 +1025,7 @@ export default function CastingPanel() {
           </div>
           <div>
             <h1 className="text-xl font-black text-display tracking-tight">Painel de Casting</h1>
-            <p className="text-xs text-slate-400">Inscrição das turmas para o Desafio Bíblico - Vida de Jesus</p>
+            <p className="text-xs text-slate-400">Inscrição das turmas para o Desafio Bíblico — Vida de Jesus</p>
           </div>
         </div>
       </div>
@@ -846,25 +1131,28 @@ export default function CastingPanel() {
             Casting ao vivo
           </h3>
           <p className="text-xs text-slate-500">
-            As perguntas e opções aparecem aqui mesmo, uma pergunta por rodada, passando de aluno em aluno até acabar.
-            No final, o concorrente com mais pontos é o vencedor do casting - e é <strong>só ele(a)</strong> que fica inscrito(a) para representar a turma no concurso final.
-            Não é preciso ir à tela do apresentador - essa é só para o concurso final.
+            As perguntas e opções aparecem aqui mesmo. Cada um dos {COMPETITOR_COUNT} concorrentes responde ao mesmo número de perguntas
+            — todas diferentes entre si, sem nenhuma repetição — passando a vez entre os alunos a cada rodada (aluno 1, aluno 2, ... até o último, e recomeça).
+            No final, o concorrente com mais pontos é o vencedor do casting (havendo empate, uma pergunta de desempate decide) —
+            e é <strong>só ele(a)</strong> que fica inscrito(a) para representar a turma no concurso final.
+            Não é preciso ir à tela do apresentador — essa é só para o concurso final.
           </p>
 
           <div className="max-w-xs">
             <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1.5">
-              <ListChecks className="w-3.5 h-3.5" /> Quantidade de perguntas do casting
+              <ListChecks className="w-3.5 h-3.5" /> Perguntas por aluno
             </label>
             <input
               type="number"
               value={questionCount}
               onChange={(e) => setQuestionCount(Number(e.target.value))}
               min={1}
-              max={100}
+              max={50}
               className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:bg-white focus:border-slate-400"
             />
             <p className="text-[10px] text-slate-400 mt-1 italic">
-              Dica: um múltiplo de {COMPETITOR_COUNT} faz com que todos os concorrentes respondam o mesmo número de vezes.
+              Cada um dos {COMPETITOR_COUNT} concorrentes vai responder a {Math.max(1, Math.floor(questionCount) || DEFAULT_CASTING_QUESTIONS)} pergunta(s) diferente(s),
+              num total de {Math.max(1, Math.floor(questionCount) || DEFAULT_CASTING_QUESTIONS) * COMPETITOR_COUNT} rodadas.
             </p>
           </div>
 
@@ -912,7 +1200,7 @@ export default function CastingPanel() {
                       {list.map((t) => (
                         <li key={t.id} className="text-xs text-slate-700 bg-white/70 rounded-lg px-2.5 py-1.5">
                           <span className="font-bold">{t.className || t.name}</span>
-                          {t.teacherName && <span className="text-slate-500"> - {t.teacherName}</span>}
+                          {t.teacherName && <span className="text-slate-500"> — {t.teacherName}</span>}
                           {t.castingWinnerName && (
                             <span className="block text-[10px] text-amber-600 font-semibold mt-0.5 flex items-center gap-1">
                               <Medal className="w-3 h-3" /> Vencedor(a) do casting: {t.castingWinnerName}
