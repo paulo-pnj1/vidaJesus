@@ -6,9 +6,12 @@ import {
   deleteQuestion, 
   seedQuestionsIfEmpty, 
   batchImportQuestions,
-  autoAssignAgeCategoriesByDifficulty
+  autoAssignAgeCategoriesByDifficulty,
+  syncMissingDefaultQuestions,
+  standardizeAllQuestionPoints
 } from '../lib/gameService';
-import { Plus, Trash2, Edit2, Download, AlertCircle, CheckCircle, Database, HelpCircle, FileJson, X, Wand2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, AlertCircle, CheckCircle, Database, HelpCircle, FileJson, X, Wand2, RefreshCw, Scale } from 'lucide-react';
+import { defaultQuestions } from '../data/defaultQuestions';
 
 interface DatabaseAdminProps {
   questions: Question[];
@@ -47,6 +50,8 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
   const [filterDifficulty, setFilterDifficulty] = useState<string>('');
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [autoAssigning, setAutoAssigning] = useState(false);
+  const [syncingDefaults, setSyncingDefaults] = useState(false);
+  const [standardizingPoints, setStandardizingPoints] = useState(false);
   
   // Add/Edit Form State
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -202,7 +207,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
   };
 
   const handleSeedDefaults = async () => {
-    if (window.confirm('Deseja carregar as 23 perguntas padrão sobre a Vida de Jesus?')) {
+    if (window.confirm(`Deseja carregar as ${defaultQuestions.length} perguntas padrão sobre a Vida de Jesus?`)) {
       try {
         const total = await seedQuestionsIfEmpty();
         alert(`Sucesso! Agora o banco contém ${total} perguntas.`);
@@ -279,6 +284,42 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
     }
   };
 
+  const missingDefaultQuestionsCount = (() => {
+    const existingIds = new Set(questions.map((q) => q.id));
+    return defaultQuestions.filter((q) => !existingIds.has(q.id)).length;
+  })();
+
+  const handleSyncMissingDefaults = async () => {
+    setSyncingDefaults(true);
+    try {
+      const count = await syncMissingDefaultQuestions();
+      alert(count > 0
+        ? `${count} pergunta(s) nova(s) do banco padrão foram adicionadas (as que já existiam não foram duplicadas).`
+        : 'O banco já tem todas as perguntas padrão mais recentes.');
+    } catch (err: any) {
+      alert('Erro ao adicionar perguntas: ' + err.message);
+    } finally {
+      setSyncingDefaults(false);
+    }
+  };
+
+  const nonStandardPointsCount = questions.filter((q) => q.points !== 10).length;
+
+  const handleStandardizePoints = async () => {
+    if (!window.confirm('Isto vai igualar a pontuação de TODAS as perguntas para 10 pontos cada. Continuar?')) return;
+    setStandardizingPoints(true);
+    try {
+      const count = await standardizeAllQuestionPoints(10);
+      alert(count > 0
+        ? `${count} pergunta(s) tiveram a pontuação ajustada para 10 pontos.`
+        : 'Todas as perguntas já valem 10 pontos.');
+    } catch (err: any) {
+      alert('Erro ao padronizar pontuação: ' + err.message);
+    } finally {
+      setStandardizingPoints(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
@@ -324,6 +365,28 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
           </div>
           
           <div className="flex items-center gap-2">
+            {nonStandardPointsCount > 0 && (
+              <button
+                onClick={handleStandardizePoints}
+                disabled={standardizingPoints}
+                title="Iguala a pontuação de todas as perguntas para 10 pontos, para que nenhum aluno seja favorecido por calhar numa pergunta que vale mais"
+                className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+              >
+                <Scale className="w-3.5 h-3.5" />
+                {standardizingPoints ? 'A padronizar...' : `Padronizar Pontuação (${nonStandardPointsCount})`}
+              </button>
+            )}
+            {missingDefaultQuestionsCount > 0 && (
+              <button
+                onClick={handleSyncMissingDefaults}
+                disabled={syncingDefaults}
+                title="Adiciona ao banco as perguntas padrão novas que ainda não existem aqui (sem duplicar as já existentes)"
+                className="flex items-center gap-2 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                {syncingDefaults ? 'A adicionar...' : `Adicionar Perguntas Padrão Novas (${missingDefaultQuestionsCount})`}
+              </button>
+            )}
             {questionsMissingCategory > 0 && (
               <button
                 onClick={handleAutoAssignCategories}
@@ -341,7 +404,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
                 className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
               >
                 <Download className="w-3.5 h-3.5" />
-                Carregar Perguntas Padrão (23 Lições)
+                Carregar Perguntas Padrão ({defaultQuestions.length} Lições)
               </button>
             )}
           </div>

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // Simple front-end gate so a stray link doesn't get spammed by strangers.
-// Like the presenter/judge login, this is NOT a real security boundary -
+// Like the presenter/judge login, this is NOT a real security boundary —
 // just a shared word the teachers are given verbally/on a poster on casting day.
 const CASTING_ACCESS_CODE = 'elenco2026';
 const CASTING_AUTH_KEY = 'bible_game_casting_auth';
@@ -27,6 +27,10 @@ const CATEGORY_INFO: Record<AgeCategory, { range: string; level: string; color: 
 
 const COMPETITOR_COUNT = 5;
 const DEFAULT_CASTING_QUESTIONS = 10;
+// Every question is worth the same in casting, no matter which one a student
+// draws — this keeps things fair since each competitor answers a different
+// question. (The main contest can still use each question's own `points`.)
+const CASTING_POINTS_PER_QUESTION = 10;
 
 type CastingStage = 'form' | 'running' | 'results';
 
@@ -323,7 +327,7 @@ export default function CastingPanel() {
   // repeats for any student, and no student ever hears a question a
   // teammate already got). Students take turns round-robin: round 1 goes
   // student 1 → student 2 → ... → student 5, then round 2 repeats, etc.
-  // Casting never touches the `used` flag - it doesn't affect the pool
+  // Casting never touches the `used` flag — it doesn't affect the pool
   // available for the final contest.
   const buildAndStartSession = () => {
     setError(null);
@@ -354,7 +358,7 @@ export default function CastingPanel() {
     prepareRound(0, picked);
 
     if (actualPerStudent < desiredPerStudent) {
-      // Doesn't block the flow - just lets the teacher know fewer rounds were used,
+      // Doesn't block the flow — just lets the teacher know fewer rounds were used,
       // so that every student still answers the same number of unique questions.
       window.setTimeout(() => {
         alert(`Só havia perguntas suficientes na categoria ${AGE_CATEGORY_LABELS[category as AgeCategory]} para ${actualPerStudent} pergunta(s) por aluno (em vez das ${desiredPerStudent} pedidas), garantindo que nenhuma pergunta se repete.`);
@@ -397,7 +401,7 @@ export default function CastingPanel() {
       return {
         ...prev,
         [currentStudent]: {
-          points: prevScore.points + (isCorrect ? currentQuestion.points : 0),
+          points: prevScore.points + (isCorrect ? CASTING_POINTS_PER_QUESTION : 0),
           correct: prevScore.correct + (isCorrect ? 1 : 0),
           wrong: prevScore.wrong + (isCorrect ? 0 : 1),
         }
@@ -541,7 +545,7 @@ export default function CastingPanel() {
     }
     setSubmitting(true);
     try {
-      // Only the casting winner advances to the final contest - the turma's
+      // Only the casting winner advances to the final contest — the turma's
       // team is registered with a single competitor, not all 5 candidates.
       await registerCastingTeam(
         teacherName.trim(),
@@ -614,7 +618,7 @@ export default function CastingPanel() {
   const registeredInCategory = (c: AgeCategory) => teams.filter((t) => t.ageCategory === c);
 
   // ---------------------------------------------------------------------
-  // RUNNING: the live casting quiz - question + options appear right here,
+  // RUNNING: the live casting quiz — question + options appear right here,
   // no need to go to the Presenter/Projector screens.
   // ---------------------------------------------------------------------
   if (stage === 'running' && currentQuestion) {
@@ -677,7 +681,7 @@ export default function CastingPanel() {
                     <li key={idx}>{opt}</li>
                   ))}
                 </ol>
-                <p className="text-xs text-slate-400 italic">O aluno disse a ordem em voz alta - indique se acertou:</p>
+                <p className="text-xs text-slate-400 italic">O aluno disse a ordem em voz alta — indique se acertou:</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -741,7 +745,7 @@ export default function CastingPanel() {
                   : 'bg-rose-50 border-rose-200 text-rose-700'
               }`}>
                 {(currentQuestion.type === 'chronological' ? chronoResult : selectedOptionIdx === currentQuestion.correctAnswer)
-                  ? `Resposta CORRETA - +${currentQuestion.points} pontos para ${currentStudent} ✔`
+                  ? `Resposta CORRETA — +${CASTING_POINTS_PER_QUESTION} pontos para ${currentStudent} ✔`
                   : `Resposta INCORRETA ✖`}
               </div>
             )}
@@ -811,7 +815,7 @@ export default function CastingPanel() {
                 <h2 className="text-3xl font-black text-display">{championName}</h2>
                 <p className="text-sm text-slate-400">
                   venceu o casting com {winner?.points} pontos ({winner?.correct} acerto{winner?.correct === 1 ? '' : 's'})
-                  {tiebreak?.resolvedWinner && ' - decidido na pergunta de desempate'}
+                  {tiebreak?.resolvedWinner && ' — decidido na pergunta de desempate'}
                 </p>
               </>
             ) : (
@@ -861,7 +865,7 @@ export default function CastingPanel() {
               ) : (
                 <div className="space-y-3 pt-1">
                   <p className="text-[11px] font-black uppercase tracking-widest text-amber-700">
-                    Desempate{tiebreak.roundNum > 1 ? ` - Rodada ${tiebreak.roundNum}` : ''} • {tiebreak.candidates.length} concorrente{tiebreak.candidates.length !== 1 ? 's' : ''} disputando
+                    Desempate{tiebreak.roundNum > 1 ? ` — Rodada ${tiebreak.roundNum}` : ''} • {tiebreak.candidates.length} concorrente{tiebreak.candidates.length !== 1 ? 's' : ''} disputando
                   </p>
                   <div className="bg-white rounded-xl p-4 border border-slate-200 space-y-3">
                     <p className="text-[11px] font-bold uppercase text-slate-400">{tiebreak.question.lesson}</p>
@@ -877,7 +881,7 @@ export default function CastingPanel() {
                                 <li key={idx}>{opt}</li>
                               ))}
                             </ol>
-                            <p className="text-[11px] text-slate-400 italic">O aluno disse a ordem em voz alta - indique se acertou:</p>
+                            <p className="text-[11px] text-slate-400 italic">O aluno disse a ordem em voz alta — indique se acertou:</p>
                             <div className="grid grid-cols-2 gap-2">
                               <button
                                 onClick={() => handleTiebreakChrono(true)}
@@ -966,7 +970,7 @@ export default function CastingPanel() {
                             onClick={handleNextTiebreakRound}
                             className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-xs font-bold cursor-pointer"
                           >
-                            Ainda empatado - Nova Pergunta de Desempate
+                            Ainda empatado — Nova Pergunta de Desempate
                           </button>
                         )}
                       </div>
@@ -1025,7 +1029,7 @@ export default function CastingPanel() {
           </div>
           <div>
             <h1 className="text-xl font-black text-display tracking-tight">Painel de Casting</h1>
-            <p className="text-xs text-slate-400">Inscrição das turmas para o Desafio Bíblico - Vida de Jesus</p>
+            <p className="text-xs text-slate-400">Inscrição das turmas para o Desafio Bíblico — Vida de Jesus</p>
           </div>
         </div>
       </div>
@@ -1132,10 +1136,10 @@ export default function CastingPanel() {
           </h3>
           <p className="text-xs text-slate-500">
             As perguntas e opções aparecem aqui mesmo. Cada um dos {COMPETITOR_COUNT} concorrentes responde ao mesmo número de perguntas
-            - todas diferentes entre si, sem nenhuma repetição - passando a vez entre os alunos a cada rodada (aluno 1, aluno 2, ... até o último, e recomeça).
-            No final, o concorrente com mais pontos é o vencedor do casting (havendo empate, uma pergunta de desempate decide) -
+            — todas diferentes entre si, sem nenhuma repetição — passando a vez entre os alunos a cada rodada (aluno 1, aluno 2, ... até o último, e recomeça).
+            No final, o concorrente com mais pontos é o vencedor do casting (havendo empate, uma pergunta de desempate decide) —
             e é <strong>só ele(a)</strong> que fica inscrito(a) para representar a turma no concurso final.
-            Não é preciso ir à tela do apresentador - essa é só para o concurso final.
+            Não é preciso ir à tela do apresentador — essa é só para o concurso final.
           </p>
 
           <div className="max-w-xs">
@@ -1200,7 +1204,7 @@ export default function CastingPanel() {
                       {list.map((t) => (
                         <li key={t.id} className="text-xs text-slate-700 bg-white/70 rounded-lg px-2.5 py-1.5">
                           <span className="font-bold">{t.className || t.name}</span>
-                          {t.teacherName && <span className="text-slate-500"> - {t.teacherName}</span>}
+                          {t.teacherName && <span className="text-slate-500"> — {t.teacherName}</span>}
                           {t.castingWinnerName && (
                             <span className="block text-[10px] text-amber-600 font-semibold mt-0.5 flex items-center gap-1">
                               <Medal className="w-3 h-3" /> Vencedor(a) do casting: {t.castingWinnerName}

@@ -371,7 +371,55 @@ export async function batchImportQuestions(questions: Omit<Question, 'id' | 'use
   await batch.commit();
 }
 
-// 18. Migration helper — assigns an ageCategory to any question in the bank
+// 19. Sync Missing Default Questions — unlike seedQuestionsIfEmpty (which only
+// runs once, on a totally empty bank), this adds any question from
+// defaultQuestions.ts that isn't in the database yet (matched by id),
+// without touching or duplicating questions that are already there. Useful
+// after the default question bank is expanded (e.g. more Júnior/Sénior
+// questions added) so an already-seeded event can catch up. Returns how
+// many new questions were added.
+export async function syncMissingDefaultQuestions(): Promise<number> {
+  const qCol = collection(db, 'questions');
+  const snapshot = await getDocs(qCol);
+  const existingIds = new Set(snapshot.docs.map((d) => d.id));
+
+  const missing = defaultQuestions.filter((q) => !existingIds.has(q.id));
+  if (missing.length === 0) return 0;
+
+  const batch = writeBatch(db);
+  missing.forEach((q) => {
+    batch.set(doc(qCol, q.id), q);
+  });
+  await batch.commit();
+  return missing.length;
+}
+
+// 20. Standardize Points — sets the `points` field of every question in the
+// bank to the same fixed value, so no student is favoured or disadvantaged
+// just because they happened to draw a question worth more or less than a
+// teammate's (important for casting, where each competitor gets a
+// different question). Returns how many questions were changed.
+export async function standardizeAllQuestionPoints(points: number = 10): Promise<number> {
+  const qCol = collection(db, 'questions');
+  const snapshot = await getDocs(qCol);
+  const batch = writeBatch(db);
+  let count = 0;
+
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data() as Question;
+    if (data.points !== points) {
+      batch.update(docSnap.ref, { points });
+      count++;
+    }
+  });
+
+  if (count > 0) {
+    await batch.commit();
+  }
+  return count;
+}
+
+// 21. Migration helper — assigns an ageCategory to any question in the bank
 // that doesn't have one yet (e.g. questions created before this feature),
 // based on its difficulty: easy -> junior, medium -> pleno, hard/very_hard -> senior.
 // Existing ageCategory values are never overwritten. Returns how many were updated.
