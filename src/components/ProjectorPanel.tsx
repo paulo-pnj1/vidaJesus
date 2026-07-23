@@ -105,6 +105,57 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
     }
   }, [gameState.status, gameState.currentQuestionId]);
 
+  // Same "pergunta lançada" cue when a new tie-break question is drawn
+  // (either the first one, or a follow-up round after a tie persists).
+  const lastTiebreakQuestionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const tb = gameState.tiebreak;
+    if (tb && tb.questionId && tb.questionId !== lastTiebreakQuestionIdRef.current) {
+      lastTiebreakQuestionIdRef.current = tb.questionId;
+      try {
+        const audio = questionLaunchSoundRef.current;
+        if (audio) {
+          audio.currentTime = 0;
+          audio.play().catch(() => {
+            // Autoplay blocked or file missing - silently ignore
+          });
+        }
+      } catch (e) {
+        // Ignored if browser blocks audio
+      }
+    }
+    if (!tb) {
+      lastTiebreakQuestionIdRef.current = null;
+    }
+  }, [gameState.tiebreak?.questionId]);
+
+  // Correct/wrong cue when the tie-break round is revealed: the "correct"
+  // sound plays only if a single candidate got it right (a winner emerged),
+  // otherwise the "wrong" buzzer plays (nobody, or more than one, got it right).
+  const lastTiebreakRevealedQuestionRef = useRef<string | null>(null);
+  useEffect(() => {
+    const tb = gameState.tiebreak;
+    if (tb && tb.revealed && tb.questionId && tb.questionId !== lastTiebreakRevealedQuestionRef.current) {
+      lastTiebreakRevealedQuestionRef.current = tb.questionId;
+      const question = questions.find(q => q.id === tb.questionId);
+      const correctIds = tb.candidateTeamIds.filter(id => {
+        const ans = tb.answersByTeam[id];
+        if (!ans || !question) return false;
+        return question.type === 'chronological'
+          ? ans.chronologicalResult === true
+          : ans.selectedOptionIndex === question.correctAnswer;
+      });
+      const winnerEmerged = correctIds.length === 1;
+      playResultSound(winnerEmerged);
+      if (winnerEmerged) {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      }
+    }
+    if (!tb) {
+      lastTiebreakRevealedQuestionRef.current = null;
+    }
+  }, [gameState.tiebreak?.revealed, gameState.tiebreak?.questionId, questions]);
+
   // Subscribe to collections
   useEffect(() => {
     const unsubscribeTeams = subscribeToTeams(setTeams);
@@ -350,7 +401,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
 
             {/* PAINEL DE DESEMPATE AO VIVO */}
             {activeTiebreak && (
-              <div className="bg-slate-900 border-2 border-rose-500/40 rounded-3xl p-8 max-w-2xl mx-auto text-left space-y-4 shadow-2xl">
+              <div className="bg-slate-900 border-2 border-rose-500/40 rounded-3xl p-8 max-w-3xl mx-auto text-left space-y-4 shadow-2xl">
                 <p className="text-xs font-black uppercase tracking-widest text-rose-400 flex items-center gap-2">
                   <Swords className="w-4 h-4" />
                   Desempate — Faixa {AGE_CATEGORY_LABELS[activeTiebreak.category]}
@@ -361,25 +412,90 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
                     {tiebreakQuestion.question}
                   </h3>
                 )}
-                {!activeTiebreak.revealed ? (
-                  tiebreakCurrentTeam && (
-                    <p className="text-sm text-amber-300 font-bold">
-                      Vez de: {tiebreakCurrentTeam.memberNames?.[0] || tiebreakCurrentTeam.name}
-                    </p>
-                  )
-                ) : (
-                  <div className="space-y-1.5">
-                    {activeTiebreak.candidateTeamIds.map(id => {
-                      const t = teams.find(tm => tm.id === id);
-                      const wasCorrect = tiebreakCorrectIds.includes(id);
+
+                {!activeTiebreak.revealed && tiebreakCurrentTeam && (
+                  <p className="text-sm text-amber-300 font-bold">
+                    Vez de: {tiebreakCurrentTeam.memberNames?.[0] || tiebreakCurrentTeam.name}
+                  </p>
+                )}
+
+                {tiebreakQuestion && tiebreakQuestion.type !== 'chronological' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {activeTiebreak.shuffledOptions.map((opt, idx) => {
+                      const originalIdx = tiebreakQuestion.options.indexOf(opt);
+                      const isRevealed = activeTiebreak.revealed;
+                      const isCorrectOption = Number(tiebreakQuestion.correctAnswer) === originalIdx;
+
+                      // Which candidates picked this specific option
+                      const pickers = activeTiebreak.candidateTeamIds
+                        .filter(id => activeTiebreak.answersByTeam[id]?.selectedOptionIndex === originalIdx)
+                        .map(id => teams.find(t => t.id === id))
+                        .filter((t): t is Team => !!t);
+
                       return (
-                        <p key={id} className={`text-sm font-bold flex items-center gap-2 ${wasCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {wasCorrect ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                          {t?.memberNames?.[0] || t?.name}
-                        </p>
+                        <div
+                          key={idx}
+                          className={`p-4 rounded-2xl border-2 flex flex-col gap-2 shadow-sm transition-all duration-300 ${
+                            isRevealed && isCorrectOption
+                              ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200'
+                              : isRevealed && !isCorrectOption
+                              ? 'border-slate-800 bg-slate-950/40 opacity-40 text-slate-500'
+                              : pickers.length > 0
+                              ? 'border-blue-500 bg-blue-950/30 text-blue-200'
+                              : 'border-slate-800 bg-slate-900 text-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs flex-shrink-0 ${
+                              isRevealed && isCorrectOption ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'
+                            }`}>
+                              {String.fromCharCode(65 + idx)}
+                            </span>
+                            <span className="text-sm font-bold flex-1">{opt}</span>
+                            {isRevealed && isCorrectOption && <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />}
+                          </div>
+
+                          {pickers.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pl-11">
+                              {pickers.map(t => {
+                                const wasCorrect = isRevealed && isCorrectOption;
+                                return (
+                                  <span
+                                    key={t.id}
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                      isRevealed
+                                        ? wasCorrect
+                                          ? 'bg-emerald-500/20 text-emerald-300'
+                                          : 'bg-rose-500/20 text-rose-300'
+                                        : 'bg-blue-500/20 text-blue-300'
+                                    }`}
+                                  >
+                                    {isRevealed && (wasCorrect ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />)}
+                                    {t.memberNames?.[0] || t.name}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
+                ) : (
+                  activeTiebreak.revealed && (
+                    <div className="space-y-1.5">
+                      {activeTiebreak.candidateTeamIds.map(id => {
+                        const t = teams.find(tm => tm.id === id);
+                        const wasCorrect = tiebreakCorrectIds.includes(id);
+                        return (
+                          <p key={id} className={`text-sm font-bold flex items-center gap-2 ${wasCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {wasCorrect ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                            {t?.memberNames?.[0] || t?.name}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  )
                 )}
               </div>
             )}
