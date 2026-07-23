@@ -266,7 +266,7 @@ export default function JudgePanel() {
                             {idx + 1}º
                           </div>
                           <div className="col-span-3 flex items-center gap-2 min-w-0">
-                            {isLeader && !isEliminated && <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />}
+                            {isLeader && !isEliminated && categoryCompleted && <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />}
                             <span className="font-bold text-sm truncate">{t.memberNames?.[0] || t.name}</span>
                           </div>
                           <div className="col-span-2 text-center">
