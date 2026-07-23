@@ -816,13 +816,16 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                       if (!q) return null;
                       return (
                         <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-3">
-                          <div className="flex justify-between items-center text-xs text-slate-500 font-bold">
+                          <div className="flex flex-wrap justify-between items-center gap-1 text-xs text-slate-500 font-bold">
                             <span className="uppercase">Dificuldade: {q.difficulty} • Pontos: {q.points}</span>
                             <span className="uppercase">Tipo: {q.type}</span>
                           </div>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 flex items-center gap-1">
+                            <BookOpen className="w-3.5 h-3.5" /> Lição: {q.lesson}
+                          </p>
                           <p className="font-bold text-slate-800 text-display text-sm">{q.question}</p>
                           
-                          <div className="grid grid-cols-2 gap-2 pt-1.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1.5">
                             {q.options.map((opt, oIdx) => {
                               const isCorrect = q.type === 'true_false' 
                                 ? q.correctAnswer === oIdx 
@@ -833,8 +836,8 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                                 <div key={oIdx} className={`text-xs p-2 rounded border flex items-center gap-1.5 ${
                                   isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-800 font-semibold' : 'border-slate-100 bg-white text-slate-600'
                                 }`}>
-                                  <span className="font-bold opacity-60">{String.fromCharCode(65 + oIdx)})</span>
-                                  <span className="truncate">{opt}</span>
+                                  <span className="font-bold opacity-60 flex-shrink-0">{String.fromCharCode(65 + oIdx)})</span>
+                                  <span className="break-words">{opt}</span>
                                 </div>
                               );
                             })}
@@ -879,6 +882,9 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
 
                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 text-center space-y-2">
                     <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Pergunta Ativa</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 flex items-center justify-center gap-1">
+                      <BookOpen className="w-3.5 h-3.5" /> Lição: {activeQuestion.lesson}
+                    </p>
                     <h2 className="text-xl font-bold text-slate-800 text-display">{activeQuestion.question}</h2>
                     <p className="text-xs text-slate-500">Respondente: <strong>{gameState.currentMemberName}</strong> ({activeTeam?.name})</p>
                   </div>
@@ -932,7 +938,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                               key={idx}
                               type="button"
                               onClick={() => handleSelectOption(originalIdx)}
-                              className={`text-left px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                              className={`text-left px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-start justify-between gap-2 transition-all cursor-pointer ${
                                 isRevealed && isCorrectOpt
                                   ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
                                   : isRevealed && isSelected && !isCorrectOpt
@@ -942,7 +948,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                               }`}
                             >
-                              <span className="truncate">{String.fromCharCode(65 + idx)}) {opt}</span>
+                              <span className="break-words">{String.fromCharCode(65 + idx)}) {opt}</span>
                               {isSelected && <span className="text-[9px] uppercase font-bold flex-shrink-0">Escolhida</span>}
                             </button>
                           );
