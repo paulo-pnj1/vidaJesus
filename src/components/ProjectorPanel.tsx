@@ -323,21 +323,22 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
                 <div className="absolute top-0 right-0 h-full w-[20%] bg-gradient-to-l from-amber-500/5 to-transparent pointer-events-none"></div>
                 <div className="flex items-center gap-4 text-center md:text-left">
                   <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center font-black text-xl text-display">
-                    {activeTeam.name.substr(0, 2).toUpperCase()}
+                    {(activeTeam.memberNames?.[0] || activeTeam.name).substr(0, 2).toUpperCase()}
                   </div>
                   <div>
                     <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-1 justify-center md:justify-start">
-                      <Flame className="w-3.5 h-3.5 fill-current" /> Equipa a responder agora
+                      <Flame className="w-3.5 h-3.5 fill-current" /> Concorrente a responder agora
                       <span className="ml-1 text-blue-400 bg-blue-950/50 border border-blue-900/50 px-2 py-0.5 rounded-full normal-case font-bold tracking-normal">
                         {AGE_CATEGORY_LABELS[activeTeam.ageCategory]}
                       </span>
                     </span>
-                    <h2 className="text-3xl font-extrabold text-display text-white">{activeTeam.name}</h2>
-                    {gameState.currentMemberName && (
-                      <p className="text-xs text-slate-400">
-                        Respondente da vez: <strong className="text-white">{gameState.currentMemberName}</strong>
-                      </p>
-                    )}
+                    <h2 className="text-3xl font-extrabold text-display text-white">
+                      {gameState.currentMemberName || activeTeam.memberNames?.[0] || activeTeam.name}
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Turma {activeTeam.className || activeTeam.name}
+                      {activeTeam.teacherName && <span> • Prof. {activeTeam.teacherName}</span>}
+                    </p>
                   </div>
                 </div>
 

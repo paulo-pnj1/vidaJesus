@@ -13,7 +13,7 @@ import {
   groupTeamsByCategory
 } from '../lib/gameService';
 import { 
-  Users, Play, RotateCcw, AlertTriangle, Plus, Trash2, Database, HelpCircle, 
+  Users, Play, RotateCcw, Plus, Trash2, Database, HelpCircle, 
   Check, X, ChevronRight, Shuffle, Timer, Eye, HelpCircle as HelpIcon, ShieldAlert, BookOpen,
   Trophy, GraduationCap
 } from 'lucide-react';
@@ -29,9 +29,12 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [showDbAdmin, setShowDbAdmin] = useState(false);
 
-  // Setup Form State
-  const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamMembers, setNewTeamMembers] = useState(4);
+  // Setup Form State — cada equipa do concurso final representa UM concorrente
+  // (normalmente o vencedor do casting da turma), por isso o cadastro regista
+  // sempre o nome do concorrente junto com a turma, o professor e a faixa etária.
+  const [newCompetitorName, setNewCompetitorName] = useState('');
+  const [newClassName, setNewClassName] = useState('');
+  const [newTeacherName, setNewTeacherName] = useState('');
   const [newTeamCategory, setNewTeamCategory] = useState<AgeCategory>('pleno');
   const [setupTotalQuestions, setSetupTotalQuestions] = useState(10);
   const [setupTimerDuration, setSetupTimerDuration] = useState(30);
@@ -39,8 +42,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   // Game Play State
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
   const [filterLesson, setFilterLesson] = useState<string>('');
-  const [memberName, setMemberName] = useState<string>('');
-  const [showRotationWarning, setShowRotationWarning] = useState<string | null>(null);
 
   // Subscribe to collections
   useEffect(() => {
@@ -72,27 +73,18 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     }
   }, [questions, filterLesson, selectedQuestionId, teams, gameState.currentTeamId]);
 
-  // Handle Respondent Name check against Rotation rule
-  const handleMemberNameChange = (val: string) => {
-    setMemberName(val);
-    if (!gameState.currentTeamId || !val.trim()) {
-      setShowRotationWarning(null);
-      return;
-    }
-    const currentTeam = teams.find(t => t.id === gameState.currentTeamId);
-    if (currentTeam && currentTeam.membersAnswered?.includes(val.trim())) {
-      setShowRotationWarning(`Aviso: "${val.trim()}" já respondeu nesta rodada de rotação. Todos devem responder antes de repetir!`);
-    } else {
-      setShowRotationWarning(null);
-    }
-  };
-
-  // Add Team
+  // Add Team — regista sempre o concorrente junto com turma, professor e faixa
   const handleAddTeam = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newTeamName.trim()) {
-      await addTeam(newTeamName.trim(), Number(newTeamMembers), newTeamCategory);
-      setNewTeamName('');
+    if (newCompetitorName.trim() && newClassName.trim()) {
+      await addTeam(newClassName.trim(), 1, newTeamCategory, {
+        teacherName: newTeacherName.trim() || undefined,
+        className: newClassName.trim(),
+        memberNames: [newCompetitorName.trim()]
+      });
+      setNewCompetitorName('');
+      setNewClassName('');
+      setNewTeacherName('');
     }
   };
 
@@ -119,6 +111,15 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
 
     const questionsPerTeam = setupTotalQuestions / teams.length;
 
+    if (questionsPerTeam % 2 !== 0) {
+      alert(
+        `Cada concorrente responde a 2 perguntas por rodada antes de passar a vez. ` +
+        `Por isso, o número de perguntas por equipa (${questionsPerTeam}) tem de ser par. ` +
+        `Ajuste o número total de perguntas (ex.: múltiplo de ${teams.length * 2}).`
+      );
+      return;
+    }
+
     // Cada equipa só recebe perguntas da sua própria faixa etária, por isso é
     // preciso garantir que há perguntas suficientes NAQUELA faixa específica.
     for (const category of AGE_CATEGORIES) {
@@ -141,19 +142,22 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     await updateGameState({
       status: 'waiting',
       round: 1,
-      totalRounds: questionsPerTeam,
+      totalRounds: questionsPerTeam / 2,
       timerDuration: setupTimerDuration,
       gameMode: 'teams',
       currentTeamId: shuffled[0].id,
       currentQuestionId: null,
       revealed: false,
+      turnQuestionIndex: 0,
       eliminatedTeamIds: []
     });
   };
 
-  // Auto pick next team that has not answered in the current round
+  // Auto pick next competitor: prefer another competitor of the SAME age category
+  // that hasn't had a turn yet this round; only move to a different category once
+  // everyone in the current one has already played this round.
   const handleDrawNextTeam = async () => {
-    // In current round, which teams have answered?
+    // In current round, which teams have already completed their turn (2 perguntas)?
     const answeredTeamIds = answers
       .filter(a => a.roundNumber === gameState.round)
       .map(a => a.teamId);
@@ -174,21 +178,29 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
           currentTeamId: firstTeam?.id || null,
           currentQuestionId: null,
           status: 'waiting',
-          revealed: false
+          revealed: false,
+          turnQuestionIndex: 0
         });
       }
       return;
     }
 
-    // Pick a random team from eligible
-    const nextTeam = eligibleTeams[Math.floor(Math.random() * eligibleTeams.length)];
+    // Prefer a competitor from the SAME age category as the one who just played
+    const currentTeam = teams.find(t => t.id === gameState.currentTeamId);
+    const sameCategoryPool = currentTeam
+      ? eligibleTeams.filter(t => t.ageCategory === currentTeam.ageCategory)
+      : [];
+    const pool = sameCategoryPool.length > 0 ? sameCategoryPool : eligibleTeams;
+
+    // Pick a random team from the preferred pool
+    const nextTeam = pool[Math.floor(Math.random() * pool.length)];
     await updateGameState({
       currentTeamId: nextTeam.id,
       currentQuestionId: null,
       status: 'waiting',
-      revealed: false
+      revealed: false,
+      turnQuestionIndex: 0
     });
-    setMemberName('');
     setFilterLesson('');
     setSelectedQuestionId('');
   };
@@ -217,13 +229,17 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     const now = Date.now();
     const durationMs = gameState.timerDuration * 1000;
 
+    // O nome do concorrente é sempre o registado na equipa (concurso final = 1
+    // concorrente por equipa), nunca é necessário digitar de novo a cada pergunta.
+    const competitorName = activeTeam?.memberNames?.[0] || activeTeam?.name || 'Concorrente';
+
     await updateGameState({
       currentQuestionId: selectedQuestionId,
       status: 'running',
       timerStart: now,
       timerEnd: now + durationMs,
       revealed: false,
-      currentMemberName: memberName.trim() || 'Membro da Equipa',
+      currentMemberName: competitorName,
       shuffledOptions: shuffledOpts,
       selectedOptionIndex: null,
       chronologicalResult: null
@@ -293,8 +309,11 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     );
   };
 
-  // Move on to the next team/question after the answer has been revealed & scored
+  // Move on to the next question after the answer has been revealed & scored.
+  // The competitor answers 2 perguntas per turn — turnQuestionIndex tracks how
+  // many of those 2 have been completed so far in the current turn.
   const handleContinue = async () => {
+    const nextTurnIndex = (gameState.turnQuestionIndex || 0) + 1;
     await updateGameState({
       currentQuestionId: null,
       status: 'waiting',
@@ -302,10 +321,10 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       timerStart: null,
       timerEnd: null,
       selectedOptionIndex: null,
-      chronologicalResult: null
+      chronologicalResult: null,
+      turnQuestionIndex: nextTurnIndex
     });
 
-    setMemberName('');
     setSelectedQuestionId('');
   };
 
@@ -318,6 +337,9 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
 
   const activeQuestion = questions.find(q => q.id === gameState.currentQuestionId);
   const activeTeam = teams.find(t => t.id === gameState.currentTeamId);
+  const activeCompetitorName = activeTeam?.memberNames?.[0] || activeTeam?.name || '';
+  const turnQuestionIndex = gameState.turnQuestionIndex || 0;
+  const turnComplete = turnQuestionIndex >= 2; // concorrente já respondeu às 2 perguntas desta rodada
 
   // List lessons for filter — restrito à faixa etária da equipa da vez
   const lessonsWithUnusedQuestions = Array.from(new Set(
@@ -457,33 +479,42 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                 </p>
               </div>
 
-              {/* Add Team form */}
+              {/* Add Team form — regista o concorrente junto com turma, professor e faixa (idade) */}
               <form onSubmit={handleAddTeam} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div className="md:col-span-5">
-                  <label className="block text-xs font-bold text-slate-600 mb-1">Nome da Equipa</label>
+                <div className="md:col-span-4">
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Nome do Concorrente</label>
                   <input
                     type="text"
-                    value={newTeamName}
-                    onChange={(e) => setNewTeamName(e.target.value)}
-                    placeholder="Ex: Galileia / Betel / Caná"
+                    value={newCompetitorName}
+                    onChange={(e) => setNewCompetitorName(e.target.value)}
+                    placeholder="Ex: João Silva"
                     className="w-full text-sm bg-white border border-slate-200 rounded-lg p-2 outline-none focus:border-slate-400"
                     required
                   />
                 </div>
                 <div className="md:col-span-3">
-                  <label className="block text-xs font-bold text-slate-600 mb-1">Nº Integrantes</label>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Turma</label>
                   <input
-                    type="number"
-                    value={newTeamMembers}
-                    onChange={(e) => setNewTeamMembers(Number(e.target.value))}
+                    type="text"
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
+                    placeholder="Ex: Turma A"
                     className="w-full text-sm bg-white border border-slate-200 rounded-lg p-2 outline-none focus:border-slate-400"
-                    min={1}
-                    max={20}
                     required
                   />
                 </div>
+                <div className="md:col-span-3">
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Professor(a)</label>
+                  <input
+                    type="text"
+                    value={newTeacherName}
+                    onChange={(e) => setNewTeacherName(e.target.value)}
+                    placeholder="Ex: Prof. Ana"
+                    className="w-full text-sm bg-white border border-slate-200 rounded-lg p-2 outline-none focus:border-slate-400"
+                  />
+                </div>
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-600 mb-1">Faixa</label>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Idade (Faixa)</label>
                   <select
                     value={newTeamCategory}
                     onChange={(e) => setNewTeamCategory(e.target.value as AgeCategory)}
@@ -494,12 +525,12 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     ))}
                   </select>
                 </div>
-                <div className="md:col-span-2">
+                <div className="md:col-span-12">
                   <button
                     type="submit"
                     className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all h-[38px] cursor-pointer"
                   >
-                    <Plus className="w-4 h-4" /> Add
+                    <Plus className="w-4 h-4" /> Inscrever Concorrente
                   </button>
                 </div>
               </form>
@@ -517,11 +548,11 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     <div key={t.id} className="flex justify-between items-center border border-slate-100 bg-white p-3.5 rounded-xl shadow-xs">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-600 text-display text-sm">
-                          {t.name.substr(0, 2).toUpperCase()}
+                          {(t.memberNames?.[0] || t.name).substr(0, 2).toUpperCase()}
                         </div>
                         <div>
                           <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                            {t.name}
+                            {t.memberNames?.[0] || t.name}
                             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${
                               t.ageCategory === 'junior' ? 'bg-sky-100 text-sky-700' :
                               t.ageCategory === 'senior' ? 'bg-purple-100 text-purple-700' :
@@ -531,12 +562,9 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                             </span>
                           </h4>
                           <p className="text-[11px] text-slate-500">
-                            {t.membersCount} Integrantes
+                            Turma {t.className || t.name}
                             {t.teacherName && <span> • Prof. {t.teacherName}</span>}
                           </p>
-                          {t.memberNames && t.memberNames.length > 0 && (
-                            <p className="text-[10px] text-slate-400 mt-0.5">{t.memberNames.join(', ')}</p>
-                          )}
                         </div>
                       </div>
                       <button
@@ -561,10 +589,15 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
               {/* Active Step status banner */}
               <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-sm space-y-4">
                 <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs uppercase font-bold text-slate-400 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg">
                       Rodada {gameState.round} de {gameState.totalRounds}
                     </span>
+                    {activeTeam && gameState.status !== 'finished' && (
+                      <span className="text-xs uppercase font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                        Pergunta {Math.min(turnQuestionIndex + 1, 2)} de 2
+                      </span>
+                    )}
                     <span className={`text-xs uppercase font-extrabold px-2.5 py-1 rounded-lg ${
                       gameState.status === 'running' ? 'bg-red-500/10 text-red-400 border border-red-500/30' : 
                       gameState.status === 'showing_answer' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
@@ -576,55 +609,44 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     </span>
                   </div>
 
-                  {/* Draw next team / Turn advancer */}
-                  {gameState.status === 'waiting' && !gameState.currentQuestionId && (
+                  {/* Draw next competitor — só disponível quando o concorrente da vez já
+                      respondeu às 2 perguntas da rodada (ou ainda não há concorrente ativo) */}
+                  {gameState.status === 'waiting' && !gameState.currentQuestionId && (turnComplete || !activeTeam) && (
                     <button
                       onClick={handleDrawNextTeam}
                       className="flex items-center gap-1.5 text-xs bg-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded-lg hover:bg-amber-400 transition-all cursor-pointer"
                     >
                       <Shuffle className="w-3.5 h-3.5" />
-                      Sortear/Próxima Equipa
+                      Sortear/Próximo Concorrente
                     </button>
                   )}
                 </div>
 
-                {/* Active Team display */}
+                {/* Active Competitor display — concorrente, turma, professor e idade juntos */}
                 {activeTeam ? (
-                  <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Equipa da Vez</p>
-                      <h2 className="text-2xl font-black text-display text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
-                        {activeTeam.name}
-                      </h2>
-                      <p className="text-[11px] text-slate-400">
-                        Participação equilibrada: {activeTeam.membersAnswered?.length || 0} de {activeTeam.membersCount} responderam nesta rotação.
-                      </p>
+                  <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/50 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Concorrente da Vez</p>
+                      <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-blue-950/50 border border-blue-900/50 text-blue-300">
+                        Idade: {AGE_CATEGORY_LABELS[activeTeam.ageCategory]}
+                      </span>
                     </div>
-
-                    {/* Respondent field */}
-                    {gameState.status === 'waiting' && (
-                      <div className="w-full md:w-[250px] space-y-1.5">
-                        <label className="block text-[11px] font-bold text-slate-300">Nome do Integrante que vai Responder</label>
-                        <input
-                          type="text"
-                          value={memberName}
-                          onChange={(e) => handleMemberNameChange(e.target.value)}
-                          placeholder="Ex: João Silva / Maria"
-                          className="w-full text-xs bg-slate-900 border border-slate-700 rounded-lg p-2.5 outline-none focus:border-amber-400 text-white"
-                        />
-                      </div>
+                    <h2 className="text-2xl font-black text-display text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
+                      {activeCompetitorName}
+                    </h2>
+                    <p className="text-[11px] text-slate-400">
+                      Turma {activeTeam.className || activeTeam.name}
+                      {activeTeam.teacherName && <span> • Prof. {activeTeam.teacherName}</span>}
+                    </p>
+                    {turnComplete && gameState.status === 'waiting' && (
+                      <p className="text-[11px] text-amber-300 font-semibold pt-1">
+                        Este concorrente já respondeu às 2 perguntas desta rodada. Sorteie o próximo concorrente da mesma categoria (ou de outra, se esta já terminou).
+                      </p>
                     )}
                   </div>
                 ) : (
                   <div className="text-center py-4 text-slate-400 text-xs">
                     Nenhuma equipa ativa no momento. Sorteie a próxima equipa acima.
-                  </div>
-                )}
-
-                {showRotationWarning && (
-                  <div className="flex items-center gap-2 text-amber-400 bg-amber-400/10 border border-amber-500/20 p-3 rounded-lg text-xs font-medium">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
-                    <span>{showRotationWarning}</span>
                   </div>
                 )}
               </div>
@@ -686,7 +708,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
               )}
 
               {/* QUESTION SELECTOR & CONTROLS */}
-              {gameState.status === 'waiting' && activeTeam && (
+              {gameState.status === 'waiting' && activeTeam && !turnComplete && (
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
                   <h3 className="text-lg font-bold text-slate-800 text-display border-b pb-2 flex items-center gap-2">
                     <BookOpen className="w-5 h-5 text-amber-500" />

@@ -59,6 +59,7 @@ export interface GameState {
   gameMode: GameMode;
   revealed: boolean;
   currentMemberName?: string;
+  turnQuestionIndex?: number; // How many of the 2 questions in the current competitor's turn have been answered (0, 1 or 2)
   eliminatedTeamIds?: string[]; // For competition mode
   shuffledOptions?: string[]; // Store shuffled options for the current question
   selectedOptionIndex?: number | null; // Original (non-shuffled) index of the option chosen by the presenter/system as the team's answer

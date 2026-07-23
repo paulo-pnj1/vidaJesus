@@ -106,17 +106,18 @@ export default function JudgePanel() {
             {activeTeam && (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3 flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl flex items-center justify-center font-black text-sm text-display flex-shrink-0">
-                  {activeTeam.name.substr(0, 2).toUpperCase()}
+                  {(activeTeam.memberNames?.[0] || activeTeam.name).substr(0, 2).toUpperCase()}
                 </div>
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-1">
-                    <Flame className="w-3 h-3 fill-current" /> Equipa a responder agora
+                    <Flame className="w-3 h-3 fill-current" /> Concorrente a responder agora
                   </span>
                   <p className="text-sm font-bold text-white">
-                    {activeTeam.name}
-                    {gameState?.currentMemberName && (
-                      <span className="text-slate-400 font-normal"> — {gameState.currentMemberName}</span>
-                    )}
+                    {gameState?.currentMemberName || activeTeam.memberNames?.[0] || activeTeam.name}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Turma {activeTeam.className || activeTeam.name}
+                    {activeTeam.teacherName && <span> • Prof. {activeTeam.teacherName}</span>}
                   </p>
                 </div>
                 <span className="ml-auto text-[10px] font-black uppercase tracking-wider bg-blue-950/50 border border-blue-900/50 text-blue-400 px-2.5 py-1 rounded-full">
