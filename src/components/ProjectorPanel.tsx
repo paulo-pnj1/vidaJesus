@@ -375,8 +375,11 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
                     {winner ? (
                       <>
                         <h2 className="text-3xl font-black tracking-tight text-display text-white">
-                          {winner.className || winner.name}
+                          {winner.memberNames?.[0] || winner.name}
                         </h2>
+                        <p className="text-sm font-bold text-amber-200">
+                          Turma {winner.className || winner.name}
+                        </p>
                         {winner.teacherName && (
                           <p className="text-xs text-slate-400">Prof. {winner.teacherName}</p>
                         )}
@@ -387,7 +390,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
                           Aguardando Desempate
                         </h2>
                         <p className="text-xs text-slate-400">
-                          {tiedTeams.map(t => t.className || t.name).join(' vs ')}
+                          {tiedTeams.map(t => t.memberNames?.[0] || t.name).join(' vs ')}
                         </p>
                       </>
                     )}

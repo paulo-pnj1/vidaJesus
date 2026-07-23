@@ -476,6 +476,32 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const handleTiebreakReveal = async () => {
     const tb = gameState.tiebreak;
     if (!tb) return;
+    const question = questions.find(q => q.id === tb.questionId);
+
+    // O desempate também conta para o total de respostas certas/erradas de
+    // cada equipa (visível na tabela de jurados e nos resultados finais),
+    // mas NÃO altera a pontuação — o desempate serve para decidir o
+    // vencedor, não para somar pontos extra.
+    if (question) {
+      for (const teamId of tb.candidateTeamIds) {
+        const ans = tb.answersByTeam[teamId];
+        if (!ans) continue;
+        const isCorrect = question.type === 'chronological'
+          ? ans.chronologicalResult === true
+          : ans.selectedOptionIndex === question.correctAnswer;
+        const team = teams.find(t => t.id === teamId);
+        await submitAnswer(
+          teamId,
+          question.id,
+          isCorrect,
+          0,
+          9000 + tb.roundNum, // marcador distinto para não interferir na contagem das rodadas normais
+          team?.memberNames?.[0] || team?.name,
+          0
+        );
+      }
+    }
+
     await updateGameState({ tiebreak: { ...tb, revealed: true } });
   };
 
