@@ -101,6 +101,11 @@ export default function JudgePanel() {
             <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider px-1 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               Pergunta Atual (Ronda {gameState?.round} de {gameState?.totalRounds})
+              {gameState?.activeCategory && (
+                <span className="text-blue-400 bg-blue-950/50 border border-blue-900/50 px-2 py-0.5 rounded-full normal-case font-bold tracking-normal text-[10px]">
+                  Faixa {AGE_CATEGORY_LABELS[gameState.activeCategory]} em disputa
+                </span>
+              )}
             </h2>
 
             {activeTeam && (
@@ -197,19 +202,35 @@ export default function JudgePanel() {
           <div className="space-y-8 mt-4">
             {groups.map(({ category, teams: groupTeams }) => {
               const winner = groupTeams[0] || null;
+              const categoryCompleted = gameState?.completedCategories?.includes(category) || gameFinished;
+              const categoryIsActive = gameState?.activeCategory === category && !categoryCompleted;
               return (
                 <div key={category} className="space-y-3">
                   <h3 className="text-xs font-black uppercase tracking-widest text-blue-400 px-1 flex items-center gap-2">
                     Faixa {AGE_CATEGORY_LABELS[category]}
                     <span className="text-slate-500 font-mono font-normal normal-case">({groupTeams.length} equipa{groupTeams.length > 1 ? 's' : ''})</span>
+                    {categoryIsActive && (
+                      <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wide text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded-full normal-case">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Em disputa agora
+                      </span>
+                    )}
+                    {categoryCompleted && (
+                      <span className="text-[10px] font-black uppercase tracking-wide text-amber-400 bg-amber-950/40 border border-amber-800 px-2 py-0.5 rounded-full normal-case">
+                        Concluída
+                      </span>
+                    )}
                   </h3>
 
-                  {gameFinished && winner && (
+                  {categoryCompleted && winner && (
                     <div className="bg-gradient-to-r from-amber-500/20 to-amber-400/5 border border-amber-500/40 rounded-2xl p-5 flex items-center gap-4">
                       <Trophy className="w-10 h-10 text-amber-400 flex-shrink-0" />
                       <div>
                         <p className="text-xs uppercase font-bold tracking-wider text-amber-400">Vencedor — Faixa {AGE_CATEGORY_LABELS[category]}</p>
-                        <h2 className="text-2xl font-black text-display">{winner.name}</h2>
+                        <h2 className="text-2xl font-black text-display">{winner.memberNames?.[0] || winner.name}</h2>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Turma {winner.className || winner.name}
+                          {winner.teacherName && <span> • Prof. {winner.teacherName}</span>}
+                        </p>
                         <p className="text-[11px] text-slate-400 font-mono mt-0.5">
                           Melhor aproveitamento: {winner.correct + winner.wrong > 0 ? Math.round((winner.correct / (winner.correct + winner.wrong)) * 100) : 0}%
                         </p>
@@ -220,7 +241,7 @@ export default function JudgePanel() {
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                     <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-400">
                       <div className="col-span-1">#</div>
-                      <div className="col-span-3">Grupo</div>
+                      <div className="col-span-3">Concorrente</div>
                       <div className="col-span-2 text-center text-amber-400">Aproveit. ★</div>
                       <div className="col-span-1 text-center">Acertos</div>
                       <div className="col-span-1 text-center">Erros</div>
@@ -244,9 +265,9 @@ export default function JudgePanel() {
                           <div className="col-span-1 font-mono text-sm font-bold text-slate-500">
                             {idx + 1}º
                           </div>
-                          <div className="col-span-3 flex items-center gap-2">
+                          <div className="col-span-3 flex items-center gap-2 min-w-0">
                             {isLeader && !isEliminated && <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />}
-                            <span className="font-bold text-sm truncate">{t.name}</span>
+                            <span className="font-bold text-sm truncate">{t.memberNames?.[0] || t.name}</span>
                           </div>
                           <div className="col-span-2 text-center">
                             <span className={`font-mono text-base font-black ${isLeader && !isEliminated ? 'text-amber-400' : 'text-white'}`}>

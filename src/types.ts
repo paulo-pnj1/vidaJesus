@@ -60,6 +60,8 @@ export interface GameState {
   revealed: boolean;
   currentMemberName?: string;
   turnQuestionIndex?: number; // How many of the 2 questions in the current competitor's turn have been answered (0, 1 or 2)
+  activeCategory?: AgeCategory | null; // Faixa etária que está a competir agora — as faixas jogam em sequência: Júnior → Pleno → Sénior
+  completedCategories?: AgeCategory[]; // Faixas cujo vencedor já foi decidido nesta partida
   eliminatedTeamIds?: string[]; // For competition mode
   shuffledOptions?: string[]; // Store shuffled options for the current question
   selectedOptionIndex?: number | null; // Original (non-shuffled) index of the option chosen by the presenter/system as the team's answer

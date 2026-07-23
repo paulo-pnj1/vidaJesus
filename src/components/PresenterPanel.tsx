@@ -136,8 +136,12 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       }
     }
     
-    // Shuffle teams for the first turn order
-    const shuffled = [...teams].sort(() => Math.random() - 0.5);
+    // As faixas etárias competem em sequência: Júnior primeiro, depois Pleno,
+    // depois Sénior. Começamos pela primeira faixa que tiver equipas inscritas.
+    const categoriesInPlay = AGE_CATEGORIES.filter(c => teams.some(t => t.ageCategory === c));
+    const firstCategory = categoriesInPlay[0];
+    const firstCategoryTeams = teams.filter(t => t.ageCategory === firstCategory);
+    const shuffledFirstCategory = [...firstCategoryTeams].sort(() => Math.random() - 0.5);
 
     await updateGameState({
       status: 'waiting',
@@ -145,33 +149,75 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       totalRounds: questionsPerTeam / 2,
       timerDuration: setupTimerDuration,
       gameMode: 'teams',
-      currentTeamId: shuffled[0].id,
+      currentTeamId: shuffledFirstCategory[0].id,
       currentQuestionId: null,
       revealed: false,
       turnQuestionIndex: 0,
+      activeCategory: firstCategory,
+      completedCategories: [],
       eliminatedTeamIds: []
     });
   };
 
-  // Auto pick next competitor: prefer another competitor of the SAME age category
-  // that hasn't had a turn yet this round; only move to a different category once
-  // everyone in the current one has already played this round.
-  const handleDrawNextTeam = async () => {
-    // In current round, which teams have already completed their turn (2 perguntas)?
+  // Picks the next competitor, always from the CURRENT active category
+  // (gameState.activeCategory). Once every competitor in that category has
+  // played all the rounds, that faixa's winner is settled and the game moves
+  // on to the next faixa in order: Júnior → Pleno → Sénior. The game only
+  // finishes once all 3 (or however many have teams) have a winner.
+  // Used both by the manual "Sortear" button and automatically as soon as a
+  // competitor finishes their 2 perguntas, so the projector already shows who
+  // is up next without the presenter having to click anything.
+  const advanceToNextCompetitor = async () => {
+    const activeCategory = gameState.activeCategory;
+    if (!activeCategory) return;
+
+    const categoryTeams = teams.filter(t => t.ageCategory === activeCategory);
+
+    // In current round, which competitors of THIS category have already
+    // completed their turn (2 perguntas)?
     const answeredTeamIds = answers
       .filter(a => a.roundNumber === gameState.round)
       .map(a => a.teamId);
 
-    const eligibleTeams = teams.filter(t => !answeredTeamIds.includes(t.id));
+    const eligibleTeams = categoryTeams.filter(t => !answeredTeamIds.includes(t.id));
 
     if (eligibleTeams.length === 0) {
-      // All teams have answered this round! Advance to next round or finish
+      // Everyone in this category has played this round.
       if (gameState.round >= gameState.totalRounds) {
-        await updateGameState({ status: 'finished' });
+        // Faixa concluída — o vencedor já está decidido (melhor colocado na
+        // tabela); avança para a próxima faixa em jogo, ou termina o concurso
+        // se esta era a última.
+        const newCompletedCategories = [...(gameState.completedCategories || []), activeCategory];
+        const categoriesInPlay = AGE_CATEGORIES.filter(c => teams.some(t => t.ageCategory === c));
+        const remainingCategories = categoriesInPlay.filter(c => !newCompletedCategories.includes(c));
+
+        if (remainingCategories.length === 0) {
+          await updateGameState({
+            status: 'finished',
+            completedCategories: newCompletedCategories,
+            currentQuestionId: null,
+            revealed: false
+          });
+        } else {
+          const nextCategory = remainingCategories[0];
+          const nextCategoryTeams = teams.filter(t => t.ageCategory === nextCategory);
+          const firstTeam = nextCategoryTeams[Math.floor(Math.random() * nextCategoryTeams.length)];
+
+          await updateGameState({
+            activeCategory: nextCategory,
+            completedCategories: newCompletedCategories,
+            round: 1,
+            currentTeamId: firstTeam?.id || null,
+            currentQuestionId: null,
+            status: 'waiting',
+            revealed: false,
+            turnQuestionIndex: 0
+          });
+        }
       } else {
-        // Next round — pick a team for the first turn
+        // Next round — still within the same category
         const nextRound = gameState.round + 1;
-        const firstTeam = teams[Math.floor(Math.random() * teams.length)];
+        const firstTeam = categoryTeams[Math.floor(Math.random() * categoryTeams.length)];
 
         await updateGameState({
           round: nextRound,
@@ -185,15 +231,8 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       return;
     }
 
-    // Prefer a competitor from the SAME age category as the one who just played
-    const currentTeam = teams.find(t => t.id === gameState.currentTeamId);
-    const sameCategoryPool = currentTeam
-      ? eligibleTeams.filter(t => t.ageCategory === currentTeam.ageCategory)
-      : [];
-    const pool = sameCategoryPool.length > 0 ? sameCategoryPool : eligibleTeams;
-
-    // Pick a random team from the preferred pool
-    const nextTeam = pool[Math.floor(Math.random() * pool.length)];
+    // Pick a random competitor still to play this round, within the same category
+    const nextTeam = eligibleTeams[Math.floor(Math.random() * eligibleTeams.length)];
     await updateGameState({
       currentTeamId: nextTeam.id,
       currentQuestionId: null,
@@ -203,6 +242,11 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     });
     setFilterLesson('');
     setSelectedQuestionId('');
+  };
+
+  // Manual override button — same logic as the automatic advance above.
+  const handleDrawNextTeam = async () => {
+    await advanceToNextCompetitor();
   };
 
   // Launch selected question to projector
@@ -309,21 +353,28 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     );
   };
 
-  // Move on to the next question after the answer has been revealed & scored.
-  // The competitor answers 2 perguntas per turn — turnQuestionIndex tracks how
-  // many of those 2 have been completed so far in the current turn.
+  // Move on after the answer has been revealed & scored. The competitor
+  // answers 2 perguntas per turn — turnQuestionIndex tracks how many of those
+  // 2 have been completed. As soon as the 2nd one is done, automatically draw
+  // the next competitor (same category) so the projector already shows who's
+  // up next, instead of waiting for the presenter to click a button.
   const handleContinue = async () => {
     const nextTurnIndex = (gameState.turnQuestionIndex || 0) + 1;
-    await updateGameState({
-      currentQuestionId: null,
-      status: 'waiting',
-      revealed: false,
-      timerStart: null,
-      timerEnd: null,
-      selectedOptionIndex: null,
-      chronologicalResult: null,
-      turnQuestionIndex: nextTurnIndex
-    });
+
+    if (nextTurnIndex >= 2) {
+      await advanceToNextCompetitor();
+    } else {
+      await updateGameState({
+        currentQuestionId: null,
+        status: 'waiting',
+        revealed: false,
+        timerStart: null,
+        timerEnd: null,
+        selectedOptionIndex: null,
+        chronologicalResult: null,
+        turnQuestionIndex: nextTurnIndex
+      });
+    }
 
     setSelectedQuestionId('');
   };
@@ -590,6 +641,15 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
               <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-sm space-y-4">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2 flex-wrap">
+                    {gameState.activeCategory && gameState.status !== 'finished' && (
+                      <span className={`text-xs uppercase font-black px-2.5 py-1 rounded-lg border ${
+                        gameState.activeCategory === 'junior' ? 'bg-sky-500/10 text-sky-300 border-sky-500/30' :
+                        gameState.activeCategory === 'senior' ? 'bg-purple-500/10 text-purple-300 border-purple-500/30' :
+                        'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                      }`}>
+                        Faixa em Disputa: {AGE_CATEGORY_LABELS[gameState.activeCategory]}
+                      </span>
+                    )}
                     <span className="text-xs uppercase font-bold text-slate-400 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg">
                       Rodada {gameState.round} de {gameState.totalRounds}
                     </span>
@@ -609,15 +669,17 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     </span>
                   </div>
 
-                  {/* Draw next competitor — só disponível quando o concorrente da vez já
-                      respondeu às 2 perguntas da rodada (ou ainda não há concorrente ativo) */}
-                  {gameState.status === 'waiting' && !gameState.currentQuestionId && (turnComplete || !activeTeam) && (
+                  {/* Sortear/Saltar concorrente — normalmente não é preciso: assim que o
+                      concorrente da vez responde às 2 perguntas, o sistema avança
+                      automaticamente. Este botão fica disponível como opção manual
+                      (ex.: saltar um concorrente ausente). */}
+                  {gameState.status === 'waiting' && !gameState.currentQuestionId && (
                     <button
                       onClick={handleDrawNextTeam}
                       className="flex items-center gap-1.5 text-xs bg-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded-lg hover:bg-amber-400 transition-all cursor-pointer"
                     >
                       <Shuffle className="w-3.5 h-3.5" />
-                      Sortear/Próximo Concorrente
+                      {activeTeam ? 'Saltar/Sortear Outro Concorrente' : 'Sortear Concorrente'}
                     </button>
                   )}
                 </div>
@@ -638,11 +700,6 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                       Turma {activeTeam.className || activeTeam.name}
                       {activeTeam.teacherName && <span> • Prof. {activeTeam.teacherName}</span>}
                     </p>
-                    {turnComplete && gameState.status === 'waiting' && (
-                      <p className="text-[11px] text-amber-300 font-semibold pt-1">
-                        Este concorrente já respondeu às 2 perguntas desta rodada. Sorteie o próximo concorrente da mesma categoria (ou de outra, se esta já terminou).
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-4 text-slate-400 text-xs">
