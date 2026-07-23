@@ -8,9 +8,10 @@ import {
   batchImportQuestions,
   autoAssignAgeCategoriesByDifficulty,
   syncMissingDefaultQuestions,
-  standardizeAllQuestionPoints
+  standardizeAllQuestionPoints,
+  deleteQuestionsOutsideLessons
 } from '../lib/gameService';
-import { Plus, Trash2, Edit2, Download, AlertCircle, CheckCircle, Database, HelpCircle, FileJson, X, Wand2, RefreshCw, Scale } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, AlertCircle, CheckCircle, Database, HelpCircle, FileJson, X, Wand2, RefreshCw, Scale, Eraser } from 'lucide-react';
 import { defaultQuestions } from '../data/defaultQuestions';
 
 interface DatabaseAdminProps {
@@ -18,30 +19,35 @@ interface DatabaseAdminProps {
   onClose: () => void;
 }
 
+// Lista oficial das 23 lições, baseada exclusivamente no material fornecido
+// ("A Vida de Jesus"). Qualquer pergunta cujo campo "lesson" não corresponda
+// a um destes títulos é considerada fora do escopo do material e é
+// removida automaticamente da lista/estatísticas/exportação (ver
+// getValidQuestions() abaixo).
 const LESSONS = [
-  "Nascimento de Jesus e Anunciação",
-  "Visita dos Reis Magos",
-  "Apresentação no Templo",
-  "Batismo de Jesus no Rio Jordão",
-  "Tentação no Deserto",
-  "O Primeiro Milagre: As Bodas de Caná",
-  "Purificação do Templo",
-  "Conversa com Nicodemos",
-  "A Mulher Samaritana",
-  "O Sermão da Montanha",
-  "A Cura do Paralítico de Cafarnaum",
-  "A Tempestade Acalmada",
-  "Parábola do Semeador",
-  "A Multiplicação dos Pães e Peixes",
-  "Jesus Caminha Sobre as Águas",
-  "A Transfiguração",
-  "A Ressurreição de Lázaro",
-  "A Entrada Triunfal em Jerusalém",
-  "A Última Ceia",
-  "A Agonia no Getsêmani",
-  "O Julgamento e a Crucificação",
-  "A Ressurreição",
-  "A Ascensão ao Céu"
+  "O Anúncio do Nascimento de João",
+  "O Anúncio do Nascimento de Jesus",
+  "O Nascimento de João Batista",
+  "O Nascimento de Jesus",
+  "A Fuga para o Egito",
+  "A Dedicação de Jesus",
+  "Jesus no Templo",
+  "O Batismo de Jesus",
+  "Jesus é Tentado",
+  "O Primeiro Milagre de Jesus",
+  "O Chamado dos Primeiros Discípulos",
+  "Os Doze Discípulos de Jesus",
+  "Jesus Ama Também as Crianças",
+  "Jesus Acalma a Tempestade",
+  "A Multiplicação dos Pães",
+  "A Cura do Cego de Jericó (Bartimeu)",
+  "Zaqueu Procura Ver Jesus",
+  "Jesus Ressuscita Lázaro",
+  "A Entrada Triunfal de Jesus em Jerusalém",
+  "Jesus é Preso",
+  "A Crucificação de Jesus",
+  "O Sepultamento de Jesus",
+  "A Ressurreição de Jesus"
 ];
 
 export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps) {
@@ -52,6 +58,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [syncingDefaults, setSyncingDefaults] = useState(false);
   const [standardizingPoints, setStandardizingPoints] = useState(false);
+  const [cleaningOutside, setCleaningOutside] = useState(false);
   
   // Add/Edit Form State
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -303,6 +310,27 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
     }
   };
 
+  // Perguntas cujo tema/lição não corresponde a nenhuma das 23 lições reais
+  // do material ("A Vida de Jesus") — normalmente lixo de um banco antigo/genérico.
+  const outsideLessonsCount = questions.filter((q) => !LESSONS.includes(q.lesson)).length;
+
+  const handleDeleteOutsideLessons = async () => {
+    if (!window.confirm(
+      `Isto vai apagar ${outsideLessonsCount} pergunta(s) que não pertencem a nenhuma das 23 lições do material "A Vida de Jesus". Esta ação não pode ser desfeita. Continuar?`
+    )) return;
+    setCleaningOutside(true);
+    try {
+      const count = await deleteQuestionsOutsideLessons(LESSONS);
+      alert(count > 0
+        ? `${count} pergunta(s) fora do material foram removidas.`
+        : 'Não havia perguntas fora do material.');
+    } catch (err: any) {
+      alert('Erro ao remover perguntas: ' + err.message);
+    } finally {
+      setCleaningOutside(false);
+    }
+  };
+
   const nonStandardPointsCount = questions.filter((q) => q.points !== 10).length;
 
   const handleStandardizePoints = async () => {
@@ -365,6 +393,17 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
           </div>
           
           <div className="flex items-center gap-2">
+            {outsideLessonsCount > 0 && (
+              <button
+                onClick={handleDeleteOutsideLessons}
+                disabled={cleaningOutside}
+                title="Remove definitivamente as perguntas cuja lição não pertence às 23 lições reais do material 'A Vida de Jesus'"
+                className="flex items-center gap-2 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+              >
+                <Eraser className="w-3.5 h-3.5" />
+                {cleaningOutside ? 'A remover...' : `Remover Fora do Material (${outsideLessonsCount})`}
+              </button>
+            )}
             {nonStandardPointsCount > 0 && (
               <button
                 onClick={handleStandardizePoints}

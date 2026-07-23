@@ -425,6 +425,32 @@ export async function standardizeAllQuestionPoints(points: number = 10): Promise
   return count;
 }
 
+// 20b. Remove Out-of-Material Questions — deletes every question in the live
+// bank whose `lesson` doesn't match one of the real lesson titles taken from
+// the source material ("A Vida de Jesus", 23 lições). This is meant to clean
+// up leftover/unrelated questions (e.g. from an earlier generic template)
+// that don't belong to the actual class content. Returns how many were removed.
+export async function deleteQuestionsOutsideLessons(validLessons: string[]): Promise<number> {
+  const validSet = new Set(validLessons);
+  const qCol = collection(db, 'questions');
+  const snapshot = await getDocs(qCol);
+  const batch = writeBatch(db);
+  let count = 0;
+
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data() as Question;
+    if (!validSet.has(data.lesson)) {
+      batch.delete(docSnap.ref);
+      count++;
+    }
+  });
+
+  if (count > 0) {
+    await batch.commit();
+  }
+  return count;
+}
+
 // 21. Migration helper — assigns an ageCategory to any question in the bank
 // that doesn't have one yet (e.g. questions created before this feature),
 // based on its difficulty: easy -> junior, medium -> pleno, hard/very_hard -> senior.
