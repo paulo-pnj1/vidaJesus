@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GameState, Question, Team, Answer, AgeCategory, AGE_CATEGORIES, AGE_CATEGORY_LABELS } from '../types';
+import { GameState, Question, Team, Answer, AgeCategory, AGE_CATEGORIES, AGE_CATEGORY_LABELS, TiebreakState, TiebreakAnswer } from '../types';
 import { 
   updateGameState, 
   subscribeToTeams, 
@@ -10,12 +10,15 @@ import {
   submitAnswer, 
   resetGame,
   seedQuestionsIfEmpty,
-  groupTeamsByCategory
+  groupTeamsByCategory,
+  getCategoryWinner,
+  getTiedTopTeams,
+  updateQuestion
 } from '../lib/gameService';
 import { 
   Users, Play, RotateCcw, Plus, Trash2, Database, HelpCircle, 
   Check, X, ChevronRight, Shuffle, Timer, Eye, HelpCircle as HelpIcon, ShieldAlert, BookOpen,
-  Trophy, GraduationCap
+  Trophy, GraduationCap, Swords
 } from 'lucide-react';
 import DatabaseAdmin from './DatabaseAdmin';
 
@@ -42,6 +45,11 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   // Game Play State
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
   const [filterLesson, setFilterLesson] = useState<string>('');
+
+  // Tie-break State — pending (not yet confirmed) answer for whichever
+  // candidate is currently up during a sudden-death tie-break round
+  const [tiebreakSelectedOption, setTiebreakSelectedOption] = useState<number | null>(null);
+  const [tiebreakChronoResult, setTiebreakChronoResult] = useState<boolean | null>(null);
 
   // Subscribe to collections
   useEffect(() => {
@@ -155,7 +163,9 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       turnQuestionIndex: 0,
       activeCategory: firstCategory,
       completedCategories: [],
-      eliminatedTeamIds: []
+      eliminatedTeamIds: [],
+      tiebreak: null,
+      categoryWinnerIds: {}
     });
   };
 
@@ -384,6 +394,145 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     if (window.confirm('Aviso Crítico: Deseja reiniciar TODO o concurso? Isto apagará o histórico de respostas, scores e desbloqueará as perguntas.')) {
       await resetGame();
     }
+  };
+
+  // --- TIE-BREAK FLOW ---
+  // Only runs once the WHOLE contest has finished (every category has played
+  // all its normal rounds), and only for a category whose 1st place is tied
+  // on number of correct answers. Candidates take turns answering the same
+  // question live; whoever is the lone correct answer wins the category. If
+  // nobody (or more than one) gets it right, a fresh question is drawn among
+  // the still-tied candidates and play continues.
+
+  // Picks a random unused question from the category's bank. Already-used
+  // questions (including ones used earlier in this same tie-break) are
+  // naturally excluded since submitAnswer/updateQuestion always marks a used
+  // question as `used: true`.
+  const pickTiebreakQuestion = (category: AgeCategory): Question | null => {
+    const pool = questions.filter(q => !q.used && q.ageCategory === category);
+    if (pool.length === 0) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+  };
+
+  const handleStartTiebreak = async (category: AgeCategory, candidates: Team[]) => {
+    const question = pickTiebreakQuestion(category);
+    if (!question) {
+      alert('Não há mais perguntas disponíveis nesta faixa etária para o desempate. Adicione perguntas ao Banco de Perguntas ou decida o vencedor manualmente com a organização.');
+      return;
+    }
+    let shuffledOpts = [...question.options];
+    if (question.type !== 'chronological' && question.type !== 'true_false') {
+      shuffledOpts = [...question.options].sort(() => Math.random() - 0.5);
+    }
+    const tiebreak: TiebreakState = {
+      category,
+      candidateTeamIds: candidates.map(c => c.id),
+      roundNum: 1,
+      questionId: question.id,
+      shuffledOptions: shuffledOpts,
+      currentTeamId: candidates[0]?.id || null,
+      answersByTeam: {},
+      revealed: false,
+      resolvedWinnerTeamId: null
+    };
+    await updateQuestion(question.id, { used: true });
+    await updateGameState({ tiebreak });
+    setTiebreakSelectedOption(null);
+    setTiebreakChronoResult(null);
+  };
+
+  // Confirms the currently-up candidate's answer and passes the turn to the
+  // next candidate who hasn't answered yet (or clears currentTeamId once
+  // everyone has, so the presenter can reveal the result).
+  const handleTiebreakConfirmAnswer = async () => {
+    const tb = gameState.tiebreak;
+    if (!tb || !tb.currentTeamId) return;
+    const question = questions.find(q => q.id === tb.questionId);
+    if (!question) return;
+
+    if (question.type === 'chronological' && tiebreakChronoResult === null) {
+      alert('Indique se a equipa acertou a ordem antes de confirmar!');
+      return;
+    }
+    if (question.type !== 'chronological' && tiebreakSelectedOption === null) {
+      alert('Selecione a opção respondida antes de confirmar!');
+      return;
+    }
+
+    const answer: TiebreakAnswer = {
+      selectedOptionIndex: question.type === 'chronological' ? null : tiebreakSelectedOption,
+      chronologicalResult: question.type === 'chronological' ? tiebreakChronoResult : null
+    };
+    const newAnswers = { ...tb.answersByTeam, [tb.currentTeamId]: answer };
+    const remaining = tb.candidateTeamIds.filter(id => !newAnswers[id]);
+
+    await updateGameState({
+      tiebreak: { ...tb, answersByTeam: newAnswers, currentTeamId: remaining[0] || null }
+    });
+    setTiebreakSelectedOption(null);
+    setTiebreakChronoResult(null);
+  };
+
+  const handleTiebreakReveal = async () => {
+    const tb = gameState.tiebreak;
+    if (!tb) return;
+    await updateGameState({ tiebreak: { ...tb, revealed: true } });
+  };
+
+  // Which candidates (still in the running) answered this round's question correctly
+  const getTiebreakCorrectCandidates = (tb: TiebreakState, question: Question | undefined): string[] => {
+    if (!question) return [];
+    return tb.candidateTeamIds.filter(id => {
+      const ans = tb.answersByTeam[id];
+      if (!ans) return false;
+      if (question.type === 'chronological') return ans.chronologicalResult === true;
+      return ans.selectedOptionIndex === question.correctAnswer;
+    });
+  };
+
+  // Exactly one correct candidate this round -> that's the category's official winner.
+  const handleTiebreakConfirmWinner = async (category: AgeCategory, winnerTeamId: string) => {
+    await updateGameState({
+      categoryWinnerIds: { ...(gameState.categoryWinnerIds || {}), [category]: winnerTeamId },
+      tiebreak: null
+    });
+  };
+
+  // Nobody (or more than one) got it right -> draw a new question and try again
+  // among whoever is still eligible (the correct ones, if any; otherwise everyone).
+  const handleTiebreakNextRound = async () => {
+    const tb = gameState.tiebreak;
+    if (!tb) return;
+    const question = questions.find(q => q.id === tb.questionId);
+    const correctIds = getTiebreakCorrectCandidates(tb, question);
+    const nextCandidateIds = correctIds.length > 0 ? correctIds : tb.candidateTeamIds;
+
+    const nextQuestion = pickTiebreakQuestion(tb.category);
+    if (!nextQuestion) {
+      alert('Não há mais perguntas disponíveis nesta faixa etária para continuar o desempate. Escolha o vencedor manualmente combinando com a organização.');
+      return;
+    }
+    let shuffledOpts = [...nextQuestion.options];
+    if (nextQuestion.type !== 'chronological' && nextQuestion.type !== 'true_false') {
+      shuffledOpts = [...nextQuestion.options].sort(() => Math.random() - 0.5);
+    }
+
+    await updateQuestion(nextQuestion.id, { used: true });
+    await updateGameState({
+      tiebreak: {
+        category: tb.category,
+        candidateTeamIds: nextCandidateIds,
+        roundNum: tb.roundNum + 1,
+        questionId: nextQuestion.id,
+        shuffledOptions: shuffledOpts,
+        currentTeamId: nextCandidateIds[0] || null,
+        answersByTeam: {},
+        revealed: false,
+        resolvedWinnerTeamId: null
+      }
+    });
+    setTiebreakSelectedOption(null);
+    setTiebreakChronoResult(null);
   };
 
   const activeQuestion = questions.find(q => q.id === gameState.currentQuestionId);
@@ -708,7 +857,12 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                 )}
               </div>
 
-              {/* RESULTADOS FINAIS — vencedores por categoria e por turma */}
+              {/* RESULTADOS FINAIS — vencedores por categoria e por turma. Só aparece
+                  quando TODAS as categorias já jogaram todas as rodadas normais
+                  (status === 'finished'). O vencedor é sempre quem tiver mais
+                  respostas certas; havendo empate nesse critério, é preciso
+                  resolver com uma pergunta de desempate antes de a categoria
+                  ter um vencedor oficial. */}
               {gameState.status === 'finished' && (
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
                   <h3 className="text-lg font-bold text-slate-800 text-display border-b pb-2 flex items-center gap-2">
@@ -720,45 +874,181 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     <p className="text-sm text-slate-400 italic">Nenhuma equipa registada.</p>
                   ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                      {groupTeamsByCategory(teams).map(({ category, teams: catTeams }) => (
-                        <div key={category} className="rounded-2xl border border-slate-200 overflow-hidden">
-                          <div className={`px-4 py-3 font-black text-display text-sm uppercase tracking-wide ${
-                            category === 'junior' ? 'bg-sky-50 text-sky-700' :
-                            category === 'senior' ? 'bg-purple-50 text-purple-700' :
-                            'bg-emerald-50 text-emerald-700'
-                          }`}>
-                            {AGE_CATEGORY_LABELS[category]}
-                          </div>
-                          <div className="divide-y divide-slate-100">
-                            {catTeams.map((t, idx) => (
-                              <div key={t.id} className={`p-3.5 flex items-center justify-between gap-3 ${idx === 0 ? 'bg-amber-50/60' : ''}`}>
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div className={`w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-black ${
-                                    idx === 0 ? 'bg-amber-400 text-slate-950' : 'bg-slate-100 text-slate-500'
-                                  }`}>
-                                    {idx === 0 ? <Trophy className="w-3.5 h-3.5" /> : idx + 1}
+                      {groupTeamsByCategory(teams).map(({ category, teams: catTeams }) => {
+                        const winner = getCategoryWinner(category, catTeams, gameState.categoryWinnerIds);
+                        const tiedTeams = getTiedTopTeams(catTeams);
+                        const hasUnresolvedTie = !winner && tiedTeams.length > 1;
+                        const tb = gameState.tiebreak;
+                        const tbActiveForThisCategory = tb?.category === category;
+                        const tbQuestion = tbActiveForThisCategory ? questions.find(q => q.id === tb!.questionId) : undefined;
+                        const tbCorrectIds = tbActiveForThisCategory && tb ? getTiebreakCorrectCandidates(tb, tbQuestion) : [];
+                        const tbTeamById = (id: string) => teams.find(t => t.id === id);
+                        const tbCurrentTeam = tbActiveForThisCategory && tb?.currentTeamId ? tbTeamById(tb.currentTeamId) : null;
+                        const tbEveryoneAnswered = tbActiveForThisCategory && tb ? tb.candidateTeamIds.every(id => !!tb.answersByTeam[id]) : false;
+
+                        return (
+                          <div key={category} className="rounded-2xl border border-slate-200 overflow-hidden">
+                            <div className={`px-4 py-3 font-black text-display text-sm uppercase tracking-wide ${
+                              category === 'junior' ? 'bg-sky-50 text-sky-700' :
+                              category === 'senior' ? 'bg-purple-50 text-purple-700' :
+                              'bg-emerald-50 text-emerald-700'
+                            }`}>
+                              {AGE_CATEGORY_LABELS[category]}
+                            </div>
+                            <div className="divide-y divide-slate-100">
+                              {catTeams.map((t) => {
+                                const isWinner = winner?.id === t.id;
+                                const isTiedCandidate = hasUnresolvedTie && tiedTeams.some(tt => tt.id === t.id);
+                                return (
+                                  <div key={t.id} className={`p-3.5 flex items-center justify-between gap-3 ${isWinner ? 'bg-amber-50/60' : isTiedCandidate ? 'bg-rose-50/50' : ''}`}>
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={`w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-black ${
+                                        isWinner ? 'bg-amber-400 text-slate-950' : 'bg-slate-100 text-slate-500'
+                                      }`}>
+                                        {isWinner ? <Trophy className="w-3.5 h-3.5" /> : isTiedCandidate ? <Swords className="w-3.5 h-3.5" /> : ''}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-bold text-slate-800 truncate flex items-center gap-1.5">
+                                          {t.className || t.name}
+                                          {isWinner && <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">Vencedor</span>}
+                                          {isTiedCandidate && <span className="text-[9px] font-black uppercase text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded-full">Empatado</span>}
+                                        </p>
+                                        {t.teacherName && (
+                                          <p className="text-[10px] text-slate-400 truncate flex items-center gap-1">
+                                            <GraduationCap className="w-3 h-3" /> {t.teacherName}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                      <p className="text-sm font-black text-slate-800">{t.correct} certa{t.correct === 1 ? '' : 's'}</p>
+                                      <p className="text-[10px] text-slate-400">{t.score} pts • {t.wrong} erradas</p>
+                                    </div>
                                   </div>
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-bold text-slate-800 truncate flex items-center gap-1.5">
-                                      {t.className || t.name}
-                                      {idx === 0 && <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">Vencedor</span>}
+                                );
+                              })}
+                            </div>
+
+                            {/* Aviso de empate + botão para iniciar o desempate */}
+                            {hasUnresolvedTie && !tbActiveForThisCategory && (
+                              <div className="p-3.5 bg-rose-50 border-t border-rose-200 space-y-2">
+                                <p className="text-xs font-bold text-rose-700 flex items-center gap-1.5">
+                                  <ShieldAlert className="w-3.5 h-3.5" />
+                                  Empate com {tiedTeams[0].correct} resposta{tiedTeams[0].correct === 1 ? '' : 's'} certa{tiedTeams[0].correct === 1 ? '' : 's'} entre {tiedTeams.length} equipas
+                                </p>
+                                <button
+                                  onClick={() => handleStartTiebreak(category, tiedTeams)}
+                                  className="w-full text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                  <Swords className="w-3.5 h-3.5" />
+                                  Iniciar Pergunta de Desempate
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Pergunta de desempate em curso */}
+                            {tbActiveForThisCategory && tb && (
+                              <div className="p-4 bg-slate-900 text-white space-y-3">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
+                                  <Swords className="w-3.5 h-3.5" />
+                                  Desempate {tb.roundNum > 1 ? `— Rodada ${tb.roundNum}` : ''} • {tb.candidateTeamIds.length} equipa{tb.candidateTeamIds.length === 1 ? '' : 's'}
+                                </p>
+
+                                {tbQuestion && (
+                                  <div className="bg-slate-800 rounded-xl p-3 space-y-1">
+                                    <p className="text-[10px] uppercase font-bold text-slate-400">{tbQuestion.lesson}</p>
+                                    <p className="text-sm font-bold">{tbQuestion.question}</p>
+                                  </div>
+                                )}
+
+                                {!tb.revealed ? (
+                                  tbCurrentTeam ? (
+                                    <div className="space-y-2">
+                                      <p className="text-xs text-amber-300 font-bold">Vez de: {tbCurrentTeam.memberNames?.[0] || tbCurrentTeam.name}</p>
+                                      {tbQuestion?.type === 'chronological' ? (
+                                        <div className="flex gap-2">
+                                          <button onClick={() => setTiebreakChronoResult(true)} className={`flex-1 text-xs font-bold py-2 rounded-lg cursor-pointer ${tiebreakChronoResult === true ? 'bg-emerald-500 text-slate-950' : 'bg-slate-700 text-slate-200'}`}>
+                                            Ordem Correta
+                                          </button>
+                                          <button onClick={() => setTiebreakChronoResult(false)} className={`flex-1 text-xs font-bold py-2 rounded-lg cursor-pointer ${tiebreakChronoResult === false ? 'bg-rose-500 text-slate-950' : 'bg-slate-700 text-slate-200'}`}>
+                                            Ordem Errada
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="grid grid-cols-1 gap-1.5">
+                                          {tb.shuffledOptions.map((opt, idx) => {
+                                            const originalIdx = tbQuestion?.options.indexOf(opt) ?? -1;
+                                            return (
+                                              <button
+                                                key={idx}
+                                                onClick={() => setTiebreakSelectedOption(originalIdx)}
+                                                className={`text-left text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer ${tiebreakSelectedOption === originalIdx ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-200'}`}
+                                              >
+                                                {String.fromCharCode(65 + idx)}. {opt}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                      <button
+                                        onClick={handleTiebreakConfirmAnswer}
+                                        className="w-full text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 py-2 rounded-lg cursor-pointer"
+                                      >
+                                        Confirmar Resposta
+                                      </button>
+                                    </div>
+                                  ) : tbEveryoneAnswered ? (
+                                    <button
+                                      onClick={handleTiebreakReveal}
+                                      className="w-full text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-2.5 rounded-lg cursor-pointer flex items-center justify-center gap-1.5"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      Revelar Resultado do Desempate
+                                    </button>
+                                  ) : null
+                                ) : (
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] text-slate-400">
+                                      Resposta correta: {tbQuestion?.type === 'chronological'
+                                        ? 'ordem apresentada corretamente'
+                                        : tbQuestion?.options[Number(tbQuestion?.correctAnswer)]}
                                     </p>
-                                    {t.teacherName && (
-                                      <p className="text-[10px] text-slate-400 truncate flex items-center gap-1">
-                                        <GraduationCap className="w-3 h-3" /> {t.teacherName}
-                                      </p>
+                                    <div className="space-y-1">
+                                      {tb.candidateTeamIds.map(id => {
+                                        const t = tbTeamById(id);
+                                        const wasCorrect = tbCorrectIds.includes(id);
+                                        return (
+                                          <p key={id} className={`text-xs font-semibold flex items-center gap-1.5 ${wasCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {wasCorrect ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                                            {t?.memberNames?.[0] || t?.name}
+                                          </p>
+                                        );
+                                      })}
+                                    </div>
+                                    {tbCorrectIds.length === 1 ? (
+                                      <button
+                                        onClick={() => handleTiebreakConfirmWinner(category, tbCorrectIds[0])}
+                                        className="w-full text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 py-2.5 rounded-lg cursor-pointer flex items-center justify-center gap-1.5"
+                                      >
+                                        <Trophy className="w-3.5 h-3.5" />
+                                        Confirmar {tbTeamById(tbCorrectIds[0])?.memberNames?.[0] || tbTeamById(tbCorrectIds[0])?.name} como Vencedor(a)
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={handleTiebreakNextRound}
+                                        className="w-full text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white py-2.5 rounded-lg cursor-pointer flex items-center justify-center gap-1.5"
+                                      >
+                                        <Swords className="w-3.5 h-3.5" />
+                                        {tbCorrectIds.length === 0 ? 'Ninguém acertou — Nova Pergunta' : 'Ainda empatados — Nova Pergunta'}
+                                      </button>
                                     )}
                                   </div>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  <p className="text-sm font-black text-slate-800">{t.score} pts</p>
-                                  <p className="text-[10px] text-slate-400">{t.correct} certas / {t.wrong} erradas</p>
-                                </div>
+                                )}
                               </div>
-                            ))}
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

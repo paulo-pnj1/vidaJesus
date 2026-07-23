@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, Question, Team, Answer, AGE_CATEGORY_LABELS } from '../types';
-import { subscribeToTeams, subscribeToQuestions, subscribeToAnswers, compareTeams, groupTeamsByCategory } from '../lib/gameService';
-import { Award, Timer, Trophy, CheckCircle, XCircle, Users, HelpCircle, ArrowUpRight, Flame } from 'lucide-react';
+import { subscribeToTeams, subscribeToQuestions, subscribeToAnswers, compareTeams, groupTeamsByCategory, getCategoryWinner, getTiedTopTeams } from '../lib/gameService';
+import { Award, Timer, Trophy, CheckCircle, XCircle, Users, HelpCircle, ArrowUpRight, Flame, Swords } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface ProjectorPanelProps {
@@ -209,10 +209,28 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
   const activeQuestion = questions.find(q => q.id === gameState.currentQuestionId);
   const activeTeam = teams.find(t => t.id === gameState.currentTeamId);
 
-  // Vencedores por faixa etária para o ecrã de campeões.
-  // Ver compareTeams() em gameService.ts para a ordem de critérios/desempates.
+  // Vencedores por faixa etária para o ecrã de campeões. O vencedor oficial é
+  // quem tiver mais respostas certas; se houver empate nesse critério, fica
+  // pendente de uma pergunta de desempate (ver getCategoryWinner em gameService.ts).
   const categoryGroups = groupTeamsByCategory(teams);
-  const categoryWinners = categoryGroups.map(g => ({ category: g.category, winner: g.teams[0] }));
+  const categoryWinners = categoryGroups.map(g => ({
+    category: g.category,
+    winner: getCategoryWinner(g.category, g.teams, gameState.categoryWinnerIds),
+    tiedTeams: getTiedTopTeams(g.teams)
+  }));
+
+  const activeTiebreak = gameState.tiebreak;
+  const tiebreakQuestion = activeTiebreak ? questions.find(q => q.id === activeTiebreak.questionId) : undefined;
+  const tiebreakCurrentTeam = activeTiebreak?.currentTeamId ? teams.find(t => t.id === activeTiebreak.currentTeamId) : null;
+  const tiebreakCorrectIds = activeTiebreak && tiebreakQuestion
+    ? activeTiebreak.candidateTeamIds.filter(id => {
+        const ans = activeTiebreak.answersByTeam[id];
+        if (!ans) return false;
+        return tiebreakQuestion.type === 'chronological'
+          ? ans.chronologicalResult === true
+          : ans.selectedOptionIndex === tiebreakQuestion.correctAnswer;
+      })
+    : [];
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-6 overflow-hidden relative font-sans select-none">
@@ -285,23 +303,42 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
           <div className="text-center space-y-10 max-w-5xl py-8 w-full">
             <p className="text-xs uppercase font-extrabold tracking-widest text-amber-400">Vencedores do Concurso</p>
             <div className={`grid gap-6 ${categoryWinners.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : categoryWinners.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-3'}`}>
-              {categoryWinners.map(({ category, winner }) => (
+              {categoryWinners.map(({ category, winner, tiedTeams }) => (
                 <div key={category} className="space-y-4">
                   <div className="relative inline-block">
-                    <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-full flex items-center justify-center mx-auto shadow-2xl ring-8 ring-amber-400/10">
-                      <Trophy className="w-12 h-12 text-slate-950 stroke-[1.5]" />
+                    <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto shadow-2xl ring-8 ${
+                      winner ? 'bg-gradient-to-br from-amber-400 to-yellow-500 ring-amber-400/10' : 'bg-gradient-to-br from-rose-500 to-rose-700 ring-rose-500/10'
+                    }`}>
+                      {winner ? (
+                        <Trophy className="w-12 h-12 text-slate-950 stroke-[1.5]" />
+                      ) : (
+                        <Swords className="w-12 h-12 text-white stroke-[1.5]" />
+                      )}
                     </div>
-                    <div className="absolute bottom-0 right-0 bg-blue-600 border-4 border-slate-950 px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-white shadow-md">
-                      Campeão
+                    <div className={`absolute bottom-0 right-0 border-4 border-slate-950 px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-white shadow-md ${winner ? 'bg-blue-600' : 'bg-rose-600'}`}>
+                      {winner ? 'Campeão' : 'Empate'}
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <p className="text-[10px] uppercase font-extrabold tracking-widest text-blue-400">Faixa {AGE_CATEGORY_LABELS[category]}</p>
-                    <h2 className="text-3xl font-black tracking-tight text-display text-white">
-                      {winner.className || winner.name}
-                    </h2>
-                    {winner.teacherName && (
-                      <p className="text-xs text-slate-400">Prof. {winner.teacherName}</p>
+                    {winner ? (
+                      <>
+                        <h2 className="text-3xl font-black tracking-tight text-display text-white">
+                          {winner.className || winner.name}
+                        </h2>
+                        {winner.teacherName && (
+                          <p className="text-xs text-slate-400">Prof. {winner.teacherName}</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <h2 className="text-xl font-black tracking-tight text-display text-rose-300">
+                          Aguardando Desempate
+                        </h2>
+                        <p className="text-xs text-slate-400">
+                          {tiedTeams.map(t => t.className || t.name).join(' vs ')}
+                        </p>
+                      </>
                     )}
                   </div>
                 </div>
@@ -310,6 +347,42 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
             <p className="text-sm text-slate-400 max-w-lg mx-auto">
               Parabéns às equipas vencedoras pelo excelente aproveitamento no estudo da Vida de Jesus!
             </p>
+
+            {/* PAINEL DE DESEMPATE AO VIVO */}
+            {activeTiebreak && (
+              <div className="bg-slate-900 border-2 border-rose-500/40 rounded-3xl p-8 max-w-2xl mx-auto text-left space-y-4 shadow-2xl">
+                <p className="text-xs font-black uppercase tracking-widest text-rose-400 flex items-center gap-2">
+                  <Swords className="w-4 h-4" />
+                  Desempate — Faixa {AGE_CATEGORY_LABELS[activeTiebreak.category]}
+                  {activeTiebreak.roundNum > 1 && <span> • Rodada {activeTiebreak.roundNum}</span>}
+                </p>
+                {tiebreakQuestion && (
+                  <h3 className="text-xl font-extrabold text-white text-display leading-tight">
+                    {tiebreakQuestion.question}
+                  </h3>
+                )}
+                {!activeTiebreak.revealed ? (
+                  tiebreakCurrentTeam && (
+                    <p className="text-sm text-amber-300 font-bold">
+                      Vez de: {tiebreakCurrentTeam.memberNames?.[0] || tiebreakCurrentTeam.name}
+                    </p>
+                  )
+                ) : (
+                  <div className="space-y-1.5">
+                    {activeTiebreak.candidateTeamIds.map(id => {
+                      const t = teams.find(tm => tm.id === id);
+                      const wasCorrect = tiebreakCorrectIds.includes(id);
+                      return (
+                        <p key={id} className={`text-sm font-bold flex items-center gap-2 ${wasCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {wasCorrect ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                          {t?.memberNames?.[0] || t?.name}
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

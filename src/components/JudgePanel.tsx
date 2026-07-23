@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GameState, Team, Answer, Question, AGE_CATEGORY_LABELS } from '../types';
-import { subscribeToGameState, subscribeToTeams, subscribeToAnswers, subscribeToQuestions, compareTeams, groupTeamsByCategory } from '../lib/gameService';
-import { Trophy, Scale, HelpCircle, CheckCircle, Flame } from 'lucide-react';
+import { subscribeToGameState, subscribeToTeams, subscribeToAnswers, subscribeToQuestions, compareTeams, groupTeamsByCategory, getCategoryWinner, getTiedTopTeams } from '../lib/gameService';
+import { Trophy, Scale, HelpCircle, CheckCircle, Flame, Swords } from 'lucide-react';
 
 // Returns the human-readable text of a question's correct option(s), regardless of type.
 // - multiple_choice / true_false / who_am_i / incomplete_verse: correctAnswer is an index into options.
@@ -201,7 +201,14 @@ export default function JudgePanel() {
         ) : (
           <div className="space-y-8 mt-4">
             {groups.map(({ category, teams: groupTeams }) => {
-              const winner = groupTeams[0] || null;
+              // A categoria só recebe um vencedor OFICIAL depois de TODO o
+              // concurso terminar (todas as categorias jogaram todas as
+              // rodadas) — nunca antes, mesmo que esta categoria em particular
+              // já tenha acabado as suas rodadas mais cedo que as outras.
+              const winner = gameFinished ? getCategoryWinner(category, groupTeams, gameState?.categoryWinnerIds) : null;
+              const tiedTeams = gameFinished ? getTiedTopTeams(groupTeams) : [];
+              const hasUnresolvedTie = gameFinished && !winner && tiedTeams.length > 1;
+              const tiebreakActiveHere = gameState?.tiebreak?.category === category;
               const categoryCompleted = gameState?.completedCategories?.includes(category) || gameFinished;
               const categoryIsActive = gameState?.activeCategory === category && !categoryCompleted;
               return (
@@ -221,7 +228,7 @@ export default function JudgePanel() {
                     )}
                   </h3>
 
-                  {categoryCompleted && winner && (
+                  {winner && (
                     <div className="bg-gradient-to-r from-amber-500/20 to-amber-400/5 border border-amber-500/40 rounded-2xl p-5 flex items-center gap-4">
                       <Trophy className="w-10 h-10 text-amber-400 flex-shrink-0" />
                       <div>
@@ -232,8 +239,31 @@ export default function JudgePanel() {
                           {winner.teacherName && <span> • Prof. {winner.teacherName}</span>}
                         </p>
                         <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          Melhor aproveitamento: {winner.correct + winner.wrong > 0 ? Math.round((winner.correct / (winner.correct + winner.wrong)) * 100) : 0}%
+                          {winner.correct} resposta{winner.correct === 1 ? '' : 's'} certa{winner.correct === 1 ? '' : 's'}
                         </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {hasUnresolvedTie && !tiebreakActiveHere && (
+                    <div className="bg-gradient-to-r from-rose-500/20 to-rose-400/5 border border-rose-500/40 rounded-2xl p-5 flex items-center gap-4">
+                      <Swords className="w-10 h-10 text-rose-400 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs uppercase font-bold tracking-wider text-rose-400">Empate — Faixa {AGE_CATEGORY_LABELS[category]}</p>
+                        <p className="text-sm font-bold text-slate-100 mt-0.5">
+                          {tiedTeams.map(t => t.className || t.name).join(' vs ')} — {tiedTeams[0]?.correct} respostas certas cada
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Aguardando o apresentador iniciar a pergunta de desempate.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {tiebreakActiveHere && (
+                    <div className="bg-gradient-to-r from-rose-500/20 to-rose-400/5 border border-rose-500/40 rounded-2xl p-5 flex items-center gap-4">
+                      <Swords className="w-10 h-10 text-rose-400 flex-shrink-0 animate-pulse" />
+                      <div>
+                        <p className="text-xs uppercase font-bold tracking-wider text-rose-400">Desempate em Curso — Faixa {AGE_CATEGORY_LABELS[category]}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">O apresentador está a conduzir a pergunta de desempate ao vivo.</p>
                       </div>
                     </div>
                   )}

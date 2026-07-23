@@ -63,7 +63,9 @@ export function subscribeToGameState(onUpdate: (state: GameState | null) => void
         eliminatedTeamIds: [],
         shuffledOptions: [],
         selectedOptionIndex: null,
-        chronologicalResult: null
+        chronologicalResult: null,
+        tiebreak: null,
+        categoryWinnerIds: {}
       };
       setDoc(docRef, initialState);
       onUpdate(initialState);
@@ -79,23 +81,22 @@ export async function updateGameState(updates: Partial<GameState>) {
 
 // Shared comparator used everywhere teams are ranked (leaderboard, judge panel, winner screen).
 // Ranking order:
-//   1. Aproveitamento % (acertos / total de respostas) — critério principal
+//   1. Número de respostas certas — critério principal para decidir o vencedor
 //   2. Pontuação (score)
-//   3. Número de respostas certas
-//   4. Menos respostas erradas
-//   5. Tempo médio de resposta (mais rápido primeiro)
-// This chain ensures a deterministic result even when teams are fully tied on
-// accuracy (e.g. everyone at 0% because no one has answered correctly yet) —
-// previously that case fell back to arbitrary Firestore snapshot order.
+//   3. Menos respostas erradas
+//   4. Tempo médio de resposta (mais rápido primeiro)
+// This chain keeps the overall leaderboard deterministic, but note that the
+// OFFICIAL winner of a category is NOT simply "whoever compareTeams puts
+// first": when two or more teams are tied on criterion #1 (correct answers)
+// the contest rule is a live tie-break question, not score/time/etc. Use
+// getCategoryWinner() / getTiedTopTeams() below to respect that rule instead
+// of reading teams[0] directly.
 export function compareTeams(a: Team, b: Team): number {
+  if (b.correct !== a.correct) return b.correct - a.correct;
+  if (b.score !== a.score) return b.score - a.score;
+  if (a.wrong !== b.wrong) return a.wrong - b.wrong;
   const aTotal = a.correct + a.wrong;
   const bTotal = b.correct + b.wrong;
-  const aRate = aTotal > 0 ? a.correct / aTotal : 0;
-  const bRate = bTotal > 0 ? b.correct / bTotal : 0;
-  if (bRate !== aRate) return bRate - aRate;
-  if (b.score !== a.score) return b.score - a.score;
-  if (b.correct !== a.correct) return b.correct - a.correct;
-  if (a.wrong !== b.wrong) return a.wrong - b.wrong;
   const aAvg = aTotal > 0 && a.totalAnswerTimeMs ? a.totalAnswerTimeMs / aTotal : Infinity;
   const bAvg = bTotal > 0 && b.totalAnswerTimeMs ? b.totalAnswerTimeMs / bTotal : Infinity;
   return aAvg - bAvg;
@@ -110,6 +111,38 @@ export function groupTeamsByCategory(teams: Team[]): { category: AgeCategory; te
       teams: teams.filter((t) => t.ageCategory === category).sort(compareTeams)
     }))
     .filter((g) => g.teams.length > 0);
+}
+
+// Given a category's teams (already sorted with compareTeams — highest
+// correct-answer count first), returns every team tied for 1st place by
+// number of correct answers. Length 1 means there's no tie; length > 1 means
+// a tie-break question is needed to decide the winner.
+export function getTiedTopTeams(categoryTeams: Team[]): Team[] {
+  if (categoryTeams.length === 0) return [];
+  const topCorrect = categoryTeams[0].correct;
+  return categoryTeams.filter((t) => t.correct === topCorrect);
+}
+
+// The single source of truth for "who won this category". Returns:
+//   - the team, if `categoryWinnerIds` already has an official pick for this
+//     category (set either automatically because there was no tie, or after
+//     a tie-break was resolved by the presenter)
+//   - the sole top team, if there's no tie on correct-answer count
+//   - null, if there's an unresolved tie (a tie-break still needs to be run)
+export function getCategoryWinner(
+  category: AgeCategory,
+  categoryTeams: Team[],
+  categoryWinnerIds?: Partial<Record<AgeCategory, string>> | null
+): Team | null {
+  if (categoryTeams.length === 0) return null;
+  const officialId = categoryWinnerIds?.[category];
+  if (officialId) {
+    const officialTeam = categoryTeams.find((t) => t.id === officialId);
+    if (officialTeam) return officialTeam;
+  }
+  const tied = getTiedTopTeams(categoryTeams);
+  if (tied.length > 1) return null;
+  return categoryTeams[0];
 }
 
 // 4. Subscribe to Teams
@@ -355,7 +388,9 @@ export async function resetGame() {
     eliminatedTeamIds: [],
     shuffledOptions: [],
     selectedOptionIndex: null,
-    chronologicalResult: null
+    chronologicalResult: null,
+    tiebreak: null,
+    categoryWinnerIds: {}
   });
 
   await batch.commit();

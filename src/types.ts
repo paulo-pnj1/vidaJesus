@@ -46,6 +46,34 @@ export interface Question {
 export type GameStatus = 'setup' | 'waiting' | 'running' | 'showing_answer' | 'finished';
 export type GameMode = 'teams';
 
+// A single candidate's answer during a tie-break round. Only one of the two
+// fields is used, depending on the tie-break question's type (same rule as
+// the main quiz: chronological questions use `chronologicalResult`, every
+// other type uses `selectedOptionIndex`).
+export interface TiebreakAnswer {
+  selectedOptionIndex: number | null;
+  chronologicalResult: boolean | null;
+}
+
+// Live state for a "sudden death" tie-break: only run AFTER every category
+// has finished all of its normal rounds (i.e. the whole contest reached
+// `status === 'finished'`), and only for a category whose top spot is tied
+// on number of correct answers. Candidates take turns answering the same
+// question; whoever is the lone correct answer wins. If nobody (or more than
+// one) gets it right, a new question is drawn among the still-tied
+// candidates and `roundNum` increments.
+export interface TiebreakState {
+  category: AgeCategory;
+  candidateTeamIds: string[]; // teams still competing in this tie-break round
+  roundNum: number;
+  questionId: string | null;
+  shuffledOptions: string[];
+  currentTeamId: string | null; // whose turn it is to answer now; null once everyone has answered (ready to reveal)
+  answersByTeam: Record<string, TiebreakAnswer>;
+  revealed: boolean;
+  resolvedWinnerTeamId: string | null;
+}
+
 export interface GameState {
   id: string;
   currentQuestionId: string | null;
@@ -61,11 +89,13 @@ export interface GameState {
   currentMemberName?: string;
   turnQuestionIndex?: number; // How many of the 2 questions in the current competitor's turn have been answered (0, 1 or 2)
   activeCategory?: AgeCategory | null; // Faixa etária que está a competir agora — as faixas jogam em sequência: Júnior → Pleno → Sénior
-  completedCategories?: AgeCategory[]; // Faixas cujo vencedor já foi decidido nesta partida
+  completedCategories?: AgeCategory[]; // Faixas cujas rodadas normais já terminaram nesta partida
   eliminatedTeamIds?: string[]; // For competition mode
   shuffledOptions?: string[]; // Store shuffled options for the current question
   selectedOptionIndex?: number | null; // Original (non-shuffled) index of the option chosen by the presenter/system as the team's answer
   chronologicalResult?: boolean | null; // For 'chronological' questions: whether the team's spoken order was correct
+  tiebreak?: TiebreakState | null; // Active sudden-death tie-break, if one is running
+  categoryWinnerIds?: Partial<Record<AgeCategory, string>>; // Official winner (team id) per category, once decided — set directly when there's no tie, or after a tie-break is resolved
 }
 
 export interface Answer {
