@@ -17,8 +17,8 @@ import {
 } from '../lib/gameService';
 import { 
   Users, Play, RotateCcw, Plus, Trash2, Database, HelpCircle, 
-  Check, X, ChevronRight, Shuffle, Timer, Eye, HelpCircle as HelpIcon, ShieldAlert, BookOpen,
-  Trophy, GraduationCap, Swords
+  Check, X, ChevronRight, Shuffle, Timer, Eye, EyeOff, HelpCircle as HelpIcon, ShieldAlert, BookOpen,
+  Trophy, GraduationCap, Swords, Tv
 } from 'lucide-react';
 import DatabaseAdmin from './DatabaseAdmin';
 
@@ -165,7 +165,8 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
       completedCategories: [],
       eliminatedTeamIds: [],
       tiebreak: null,
-      categoryWinnerIds: {}
+      categoryWinnerIds: {},
+      resultsRevealed: false
     });
   };
 
@@ -206,7 +207,8 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
             status: 'finished',
             completedCategories: newCompletedCategories,
             currentQuestionId: null,
-            revealed: false
+            revealed: false,
+            resultsRevealed: false
           });
         } else {
           const nextCategory = remainingCategories[0];
@@ -394,6 +396,14 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     if (window.confirm('Aviso Crítico: Deseja reiniciar TODO o concurso? Isto apagará o histórico de respostas, scores e desbloqueará as perguntas.')) {
       await resetGame();
     }
+  };
+
+  // Controls when the projector switches from the "júris a avaliar" holding
+  // screen to the actual champions/results screen. This gives the presenter
+  // time to resolve any tie-breaks and coordinate with the judges before the
+  // results go public.
+  const handleToggleResultsOnProjector = async () => {
+    await updateGameState({ resultsRevealed: !gameState.resultsRevealed });
   };
 
   // --- TIE-BREAK FLOW ---
@@ -891,10 +901,32 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   ter um vencedor oficial. */}
               {gameState.status === 'finished' && (
                 <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
-                  <h3 className="text-lg font-bold text-slate-800 text-display border-b pb-2 flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-amber-500" />
-                    Resultados Finais — Vencedores por Categoria
-                  </h3>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+                    <h3 className="text-lg font-bold text-slate-800 text-display flex items-center gap-2">
+                      <Trophy className="w-5 h-5 text-amber-500" />
+                      Resultados Finais — Vencedores por Categoria
+                    </h3>
+                    <button
+                      onClick={handleToggleResultsOnProjector}
+                      className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
+                        gameState.resultsRevealed
+                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                      }`}
+                    >
+                      {gameState.resultsRevealed ? (
+                        <><EyeOff className="w-4 h-4" /> Ocultar do Projetor (voltar à espera)</>
+                      ) : (
+                        <><Tv className="w-4 h-4" /> Mostrar Resultados na Tela do Projetor</>
+                      )}
+                    </button>
+                  </div>
+
+                  {!gameState.resultsRevealed && (
+                    <p className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5">
+                      O projetor está a mostrar uma mensagem de "período de avaliação dos júris" para o público. Resolva os empates abaixo se necessário e, quando estiver pronto, clique em "Mostrar Resultados na Tela do Projetor".
+                    </p>
+                  )}
 
                   {groupTeamsByCategory(teams).length === 0 ? (
                     <p className="text-sm text-slate-400 italic">Nenhuma equipa registada.</p>
@@ -935,15 +967,14 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                                       </div>
                                       <div className="min-w-0">
                                         <p className="text-sm font-bold text-slate-800 truncate flex items-center gap-1.5">
-                                          {t.className || t.name}
+                                          {t.memberNames?.[0] || t.name}
                                           {isWinner && <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">Vencedor</span>}
                                           {isTiedCandidate && <span className="text-[9px] font-black uppercase text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded-full">Empatado</span>}
                                         </p>
-                                        {t.teacherName && (
-                                          <p className="text-[10px] text-slate-400 truncate flex items-center gap-1">
-                                            <GraduationCap className="w-3 h-3" /> {t.teacherName}
-                                          </p>
-                                        )}
+                                        <p className="text-[10px] text-slate-400 truncate flex items-center gap-1">
+                                          Turma {t.className || t.name}
+                                          {t.teacherName && <span className="flex items-center gap-1"> • <GraduationCap className="w-3 h-3" /> {t.teacherName}</span>}
+                                        </p>
                                       </div>
                                     </div>
                                     <div className="text-right flex-shrink-0">

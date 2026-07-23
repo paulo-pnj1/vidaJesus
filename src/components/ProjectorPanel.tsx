@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameState, Question, Team, Answer, AGE_CATEGORY_LABELS } from '../types';
 import { subscribeToTeams, subscribeToQuestions, subscribeToAnswers, compareTeams, groupTeamsByCategory, getCategoryWinner, getTiedTopTeams } from '../lib/gameService';
-import { Award, Timer, Trophy, CheckCircle, XCircle, Users, HelpCircle, ArrowUpRight, Flame, Swords } from 'lucide-react';
+import { Award, Timer, Trophy, CheckCircle, XCircle, Users, HelpCircle, ArrowUpRight, Flame, Swords, Scale } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface ProjectorPanelProps {
@@ -110,7 +110,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
   const lastTiebreakQuestionIdRef = useRef<string | null>(null);
   useEffect(() => {
     const tb = gameState.tiebreak;
-    if (tb && tb.questionId && tb.questionId !== lastTiebreakQuestionIdRef.current) {
+    if (tb && gameState.resultsRevealed && tb.questionId && tb.questionId !== lastTiebreakQuestionIdRef.current) {
       lastTiebreakQuestionIdRef.current = tb.questionId;
       try {
         const audio = questionLaunchSoundRef.current;
@@ -127,7 +127,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
     if (!tb) {
       lastTiebreakQuestionIdRef.current = null;
     }
-  }, [gameState.tiebreak?.questionId]);
+  }, [gameState.tiebreak?.questionId, gameState.resultsRevealed]);
 
   // Correct/wrong cue when the tie-break round is revealed: the "correct"
   // sound plays only if a single candidate got it right (a winner emerged),
@@ -135,7 +135,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
   const lastTiebreakRevealedQuestionRef = useRef<string | null>(null);
   useEffect(() => {
     const tb = gameState.tiebreak;
-    if (tb && tb.revealed && tb.questionId && tb.questionId !== lastTiebreakRevealedQuestionRef.current) {
+    if (tb && gameState.resultsRevealed && tb.revealed && tb.questionId && tb.questionId !== lastTiebreakRevealedQuestionRef.current) {
       lastTiebreakRevealedQuestionRef.current = tb.questionId;
       const question = questions.find(q => q.id === tb.questionId);
       const correctIds = tb.candidateTeamIds.filter(id => {
@@ -154,7 +154,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
     if (!tb) {
       lastTiebreakRevealedQuestionRef.current = null;
     }
-  }, [gameState.tiebreak?.revealed, gameState.tiebreak?.questionId, questions]);
+  }, [gameState.tiebreak?.revealed, gameState.tiebreak?.questionId, gameState.resultsRevealed, questions]);
 
   // Subscribe to collections
   useEffect(() => {
@@ -233,7 +233,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
         });
         playBeep(523.25, 0.3);
       }
-    } else if (gameState.status === 'finished') {
+    } else if (gameState.status === 'finished' && gameState.resultsRevealed) {
       // Massive continuous confetti
       const end = Date.now() + 5 * 1000;
       const interval = setInterval(() => {
@@ -255,7 +255,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
 
       return () => clearInterval(interval);
     }
-  }, [gameState.status, gameState.revealed, answers, gameState.currentTeamId, gameState.currentQuestionId]);
+  }, [gameState.status, gameState.resultsRevealed, gameState.revealed, answers, gameState.currentTeamId, gameState.currentQuestionId]);
 
   const activeQuestion = questions.find(q => q.id === gameState.currentQuestionId);
   const activeTeam = teams.find(t => t.id === gameState.currentTeamId);
@@ -349,8 +349,33 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
           </div>
         )}
 
+        {/* HOLDING SCREEN — rounds are all done, but the presenter hasn't
+            revealed the results to the public yet (e.g. judges still
+            resolving a tie behind the scenes). */}
+        {gameState.status === 'finished' && !gameState.resultsRevealed && (
+          <div className="text-center space-y-6 max-w-2xl py-12">
+            <div className="w-24 h-24 bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-600 rounded-3xl flex items-center justify-center mx-auto shadow-xl ring-4 ring-emerald-400/20 animate-pulse">
+              <Scale className="w-12 h-12 text-slate-950 stroke-[1.5]" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-display tracking-tight text-white">
+                Período de Avaliação dos Júris
+              </h2>
+              <p className="text-sm text-slate-400 max-w-md mx-auto">
+                Voltamos daqui a pouco com o resultado final. Aguardem!
+              </p>
+            </div>
+            <div className="flex justify-center gap-2 pt-4">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-full text-xs text-slate-400 font-semibold font-mono">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Os júris estão a validar os resultados
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* FINISHED / CHAMPIONS PODIUM SCREEN */}
-        {gameState.status === 'finished' && categoryWinners.length > 0 && (
+        {gameState.status === 'finished' && gameState.resultsRevealed && categoryWinners.length > 0 && (
           <div className="text-center space-y-10 max-w-5xl py-8 w-full">
             <p className="text-xs uppercase font-extrabold tracking-widest text-amber-400">Vencedores do Concurso</p>
             <div className={`grid gap-6 ${categoryWinners.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : categoryWinners.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-3'}`}>

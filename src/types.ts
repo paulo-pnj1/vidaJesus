@@ -96,6 +96,7 @@ export interface GameState {
   chronologicalResult?: boolean | null; // For 'chronological' questions: whether the team's spoken order was correct
   tiebreak?: TiebreakState | null; // Active sudden-death tie-break, if one is running
   categoryWinnerIds?: Partial<Record<AgeCategory, string>>; // Official winner (team id) per category, once decided — set directly when there's no tie, or after a tie-break is resolved
+  resultsRevealed?: boolean; // Once the whole contest is 'finished', the projector shows a "júris a avaliar" holding screen until the presenter explicitly reveals the results with this flag
 }
 
 export interface Answer {

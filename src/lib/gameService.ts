@@ -65,7 +65,8 @@ export function subscribeToGameState(onUpdate: (state: GameState | null) => void
         selectedOptionIndex: null,
         chronologicalResult: null,
         tiebreak: null,
-        categoryWinnerIds: {}
+        categoryWinnerIds: {},
+        resultsRevealed: false
       };
       setDoc(docRef, initialState);
       onUpdate(initialState);
@@ -390,7 +391,8 @@ export async function resetGame() {
     selectedOptionIndex: null,
     chronologicalResult: null,
     tiebreak: null,
-    categoryWinnerIds: {}
+    categoryWinnerIds: {},
+    resultsRevealed: false
   });
 
   await batch.commit();
