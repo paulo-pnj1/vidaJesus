@@ -199,7 +199,7 @@ export default function JudgePanel() {
             <p className="text-xs text-slate-500">A tabela aparece automaticamente assim que o apresentador criar as equipas.</p>
           </div>
         ) : (
-          <div className="space-y-8 mt-4">
+          <div className="mt-4">
             {groups.map(({ category, teams: groupTeams }) => {
               // A categoria só recebe um vencedor OFICIAL depois de TODO o
               // concurso terminar (todas as categorias jogaram todas as
@@ -212,7 +212,7 @@ export default function JudgePanel() {
               const categoryCompleted = gameState?.completedCategories?.includes(category) || gameFinished;
               const categoryIsActive = gameState?.activeCategory === category && !categoryCompleted;
               return (
-                <div key={category} className="space-y-3">
+                <div key={category} className="inline-block align-top w-full lg:w-[calc(33.333%-16px)] lg:mr-6 lg:last:mr-0 mb-8 space-y-3">
                   <h3 className="text-xs font-black uppercase tracking-widest text-blue-400 px-1 flex items-center gap-2">
                     Faixa {AGE_CATEGORY_LABELS[category]}
                     <span className="text-slate-500 font-mono font-normal normal-case">({groupTeams.length} equipa{groupTeams.length > 1 ? 's' : ''})</span>
