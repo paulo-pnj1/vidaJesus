@@ -74,6 +74,24 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
     }
   };
 
+  // Neutral cue for when a tie-break round doesn't produce a lone winner
+  // because MORE THAN ONE candidate got it right (still tied, need another
+  // question) — deliberately different from both the "certa" and "errada"
+  // sounds, since nobody actually got it wrong here.
+  const playTiebreakStillTiedSound = () => {
+    try {
+      const mainAudio = questionLaunchSoundRef.current;
+      if (mainAudio) {
+        mainAudio.pause();
+        mainAudio.currentTime = 0;
+      }
+    } catch (e) {
+      // Ignored if browser blocks audio
+    }
+    playBeep(660, 0.12);
+    setTimeout(() => playBeep(660, 0.12), 180);
+  };
+
   // Audio played on the projector the moment a new question is launched
   const questionLaunchSoundRef = useRef<HTMLAudioElement | null>(null);
   const lastLaunchedQuestionIdRef = useRef<string | null>(null);
@@ -145,10 +163,16 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
           ? ans.chronologicalResult === true
           : ans.selectedOptionIndex === question.correctAnswer;
       });
-      const winnerEmerged = correctIds.length === 1;
-      playResultSound(winnerEmerged);
-      if (winnerEmerged) {
+      if (correctIds.length === 1) {
+        // Exactly one candidate got it right — we have a winner!
+        playResultSound(true);
         confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      } else if (correctIds.length === 0) {
+        // Nobody got it right this round
+        playResultSound(false);
+      } else {
+        // More than one candidate got it right — still tied, another round is coming
+        playTiebreakStillTiedSound();
       }
     }
     if (!tb) {
