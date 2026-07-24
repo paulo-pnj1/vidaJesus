@@ -199,7 +199,7 @@ export default function JudgePanel() {
             <p className="text-xs text-slate-500">A tabela aparece automaticamente assim que o apresentador criar as equipas.</p>
           </div>
         ) : (
-          <div className="mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4 items-start">
             {groups.map(({ category, teams: groupTeams }) => {
               // A categoria só recebe um vencedor OFICIAL depois de TODO o
               // concurso terminar (todas as categorias jogaram todas as
@@ -212,7 +212,7 @@ export default function JudgePanel() {
               const categoryCompleted = gameState?.completedCategories?.includes(category) || gameFinished;
               const categoryIsActive = gameState?.activeCategory === category && !categoryCompleted;
               return (
-                <div key={category} className="inline-block align-top w-full lg:w-[calc(33.333%-16px)] lg:mr-6 lg:last:mr-0 mb-8 space-y-3">
+                <div key={category} className="space-y-3">
                   <h3 className="text-xs font-black uppercase tracking-widest text-blue-400 px-1 flex items-center gap-2">
                     Faixa {AGE_CATEGORY_LABELS[category]}
                     <span className="text-slate-500 font-mono font-normal normal-case">({groupTeams.length} equipa{groupTeams.length > 1 ? 's' : ''})</span>
@@ -269,25 +269,21 @@ export default function JudgePanel() {
                   )}
 
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                    <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                    <div className="grid grid-cols-12 gap-1.5 px-4 py-3 bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-400">
                       <div className="col-span-1">#</div>
-                      <div className="col-span-3">Concorrente</div>
-                      <div className="col-span-2 text-center text-amber-400">Aproveit. ★</div>
-                      <div className="col-span-1 text-center">Acertos</div>
-                      <div className="col-span-1 text-center">Erros</div>
-                      <div className="col-span-2 text-center">Tempo Médio</div>
-                      <div className="col-span-2 text-center">Total Acertos</div>
+                      <div className="col-span-5">Concorrente</div>
+                      <div className="col-span-2 text-center text-emerald-400">Certas ★</div>
+                      <div className="col-span-2 text-center">Erradas</div>
+                      <div className="col-span-2 text-center">T. Médio</div>
                     </div>
 
                     {groupTeams.map((t, idx) => {
-                      const total = t.correct + t.wrong;
-                      const rate = total > 0 ? Math.round((t.correct / total) * 100) : 0;
                       const isLeader = idx === 0;
                       const isEliminated = gameState?.eliminatedTeamIds?.includes(t.id);
                       return (
                         <div
                           key={t.id}
-                          className={`grid grid-cols-12 gap-2 px-5 py-4 items-center border-b border-slate-800/60 last:border-b-0 ${
+                          className={`grid grid-cols-12 gap-1.5 px-4 py-3.5 items-center border-b border-slate-800/60 last:border-b-0 ${
                             isEliminated ? 'opacity-40 line-through' :
                             isLeader ? 'bg-amber-400/5' : ''
                           }`}
@@ -295,19 +291,17 @@ export default function JudgePanel() {
                           <div className="col-span-1 font-mono text-sm font-bold text-slate-500">
                             {idx + 1}º
                           </div>
-                          <div className="col-span-3 flex items-center gap-2 min-w-0">
+                          <div className="col-span-5 flex items-center gap-1.5 min-w-0">
                             {isLeader && !isEliminated && categoryCompleted && <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />}
                             <span className="font-bold text-sm truncate">{t.memberNames?.[0] || t.name}</span>
                           </div>
                           <div className="col-span-2 text-center">
-                            <span className={`font-mono text-base font-black ${isLeader && !isEliminated ? 'text-amber-400' : 'text-white'}`}>
-                              {rate}%
+                            <span className={`font-mono text-base font-black ${isLeader && !isEliminated ? 'text-amber-400' : 'text-emerald-400'}`}>
+                              {t.correct}
                             </span>
                           </div>
-                          <div className="col-span-1 text-center font-mono text-sm text-emerald-400 font-bold">{t.correct}</div>
-                          <div className="col-span-1 text-center font-mono text-sm text-rose-400 font-bold">{t.wrong}</div>
+                          <div className="col-span-2 text-center font-mono text-sm text-rose-400 font-bold">{t.wrong}</div>
                           <div className="col-span-2 text-center font-mono text-xs text-slate-300">{formatAvgTime(t)}</div>
-                          <div className="col-span-2 text-center font-mono text-xs text-sky-300 font-bold">{formatTotalCorrectTime(t)}</div>
                         </div>
                       );
                     })}
@@ -316,9 +310,9 @@ export default function JudgePanel() {
               );
             })}
 
-            <div className="text-center pt-2">
+            <div className="lg:col-span-3 text-center pt-2">
               <span className="text-[10px] text-slate-500 font-mono">
-                ★ Classificação por Aproveitamento (%) • Desempate: Pontuação → Acertos → Menos Erros → Tempo Médio • Sincronizado automaticamente
+                ★ Classificação por Nº de Respostas Certas • Desempate: Pergunta de Desempate ao Vivo • Sincronizado automaticamente
               </span>
             </div>
           </div>
