@@ -76,7 +76,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
 
   // Neutral cue for when a tie-break round doesn't produce a lone winner
   // because MORE THAN ONE candidate got it right (still tied, need another
-  // question) — deliberately different from both the "certa" and "errada"
+  // question) - deliberately different from both the "certa" and "errada"
   // sounds, since nobody actually got it wrong here.
   const playTiebreakStillTiedSound = () => {
     try {
@@ -164,14 +164,14 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
           : ans.selectedOptionIndex === question.correctAnswer;
       });
       if (correctIds.length === 1) {
-        // Exactly one candidate got it right — we have a winner!
+        // Exactly one candidate got it right - we have a winner!
         playResultSound(true);
         confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
       } else if (correctIds.length === 0) {
         // Nobody got it right this round
         playResultSound(false);
       } else {
-        // More than one candidate got it right — still tied, another round is coming
+        // More than one candidate got it right - still tied, another round is coming
         playTiebreakStillTiedSound();
       }
     }
@@ -373,7 +373,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
           </div>
         )}
 
-        {/* HOLDING SCREEN — rounds are all done, but the presenter hasn't
+        {/* HOLDING SCREEN - rounds are all done, but the presenter hasn't
             revealed the results to the public yet (e.g. judges still
             resolving a tie behind the scenes). */}
         {gameState.status === 'finished' && !gameState.resultsRevealed && (
@@ -456,7 +456,7 @@ export default function ProjectorPanel({ gameState }: ProjectorPanelProps) {
               <div className="bg-slate-900 border-2 border-rose-500/40 rounded-3xl p-8 max-w-3xl mx-auto text-left space-y-4 shadow-2xl">
                 <p className="text-xs font-black uppercase tracking-widest text-rose-400 flex items-center gap-2">
                   <Swords className="w-4 h-4" />
-                  Desempate — Faixa {AGE_CATEGORY_LABELS[activeTiebreak.category]}
+                  Desempate - Faixa {AGE_CATEGORY_LABELS[activeTiebreak.category]}
                   {activeTiebreak.roundNum > 1 && <span> • Rodada {activeTiebreak.roundNum}</span>}
                 </p>
                 {tiebreakQuestion && (

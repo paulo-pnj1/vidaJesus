@@ -311,7 +311,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
   };
 
   // Perguntas cujo tema/lição não corresponde a nenhuma das 23 lições reais
-  // do material ("A Vida de Jesus") — normalmente lixo de um banco antigo/genérico.
+  // do material ("A Vida de Jesus") - normalmente lixo de um banco antigo/genérico.
   const outsideLessonsCount = questions.filter((q) => !LESSONS.includes(q.lesson)).length;
 
   const handleDeleteOutsideLessons = async () => {

@@ -14,7 +14,7 @@ function getCorrectAnswerText(q: Question): string {
       .join('  →  ');
   }
   const idx = Number(q.correctAnswer);
-  return q.options?.[idx] ?? '—';
+  return q.options?.[idx] ?? '-';
 }
 
 export default function JudgePanel() {
@@ -36,7 +36,7 @@ export default function JudgePanel() {
     };
   }, []);
 
-  // Pergunta e equipa atualmente em jogo — exatamente a mesma que está a ser
+  // Pergunta e equipa atualmente em jogo - exatamente a mesma que está a ser
   // mostrada no painel do projetor, mas aqui a resposta certa aparece já destacada.
   const activeQuestion = useMemo(
     () => questions.find((q) => q.id === gameState?.currentQuestionId) || null,
@@ -48,14 +48,14 @@ export default function JudgePanel() {
   );
   const showActiveQuestionStage = !!gameState && gameState.status !== 'setup' && gameState.status !== 'finished';
 
-  // Classificação separada por faixa etária — ver compareTeams() em gameService.ts
+  // Classificação separada por faixa etária - ver compareTeams() em gameService.ts
   // para a ordem de critérios/desempates dentro de cada faixa.
   const groups = groupTeamsByCategory(teams);
   const gameFinished = gameState?.status === 'finished';
 
   const formatAvgTime = (t: Team) => {
     const total = t.correct + t.wrong;
-    if (!total || !t.totalAnswerTimeMs) return '—';
+    if (!total || !t.totalAnswerTimeMs) return '-';
     return `${(t.totalAnswerTimeMs / total / 1000).toFixed(1)}s`;
   };
 
@@ -72,7 +72,7 @@ export default function JudgePanel() {
 
   // Total (sum) time spent on CORRECT answers only, formatted as m:ss when it reaches 60s+
   const formatTotalCorrectTime = (t: Team) => {
-    if (!hasCorrectAnswers(t.id)) return '—';
+    if (!hasCorrectAnswers(t.id)) return '-';
     const totalSeconds = getCorrectAnswerTimeMs(t.id) / 1000;
     if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
     const minutes = Math.floor(totalSeconds / 60);
@@ -95,7 +95,7 @@ export default function JudgePanel() {
       {/* Main Content */}
       <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-6">
 
-        {/* PERGUNTA ATUAL — espelha o painel do projetor, com a resposta certa já destacada */}
+        {/* PERGUNTA ATUAL - espelha o painel do projetor, com a resposta certa já destacada */}
         {showActiveQuestionStage && (
           <div className="space-y-4">
             <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider px-1 flex items-center gap-2">
@@ -203,7 +203,7 @@ export default function JudgePanel() {
             {groups.map(({ category, teams: groupTeams }) => {
               // A categoria só recebe um vencedor OFICIAL depois de TODO o
               // concurso terminar (todas as categorias jogaram todas as
-              // rodadas) — nunca antes, mesmo que esta categoria em particular
+              // rodadas) - nunca antes, mesmo que esta categoria em particular
               // já tenha acabado as suas rodadas mais cedo que as outras.
               const winner = gameFinished ? getCategoryWinner(category, groupTeams, gameState?.categoryWinnerIds) : null;
               const tiedTeams = gameFinished ? getTiedTopTeams(groupTeams) : [];
@@ -232,7 +232,7 @@ export default function JudgePanel() {
                     <div className="bg-gradient-to-r from-amber-500/20 to-amber-400/5 border border-amber-500/40 rounded-2xl p-5 flex items-center gap-4">
                       <Trophy className="w-10 h-10 text-amber-400 flex-shrink-0" />
                       <div>
-                        <p className="text-xs uppercase font-bold tracking-wider text-amber-400">Vencedor — Faixa {AGE_CATEGORY_LABELS[category]}</p>
+                        <p className="text-xs uppercase font-bold tracking-wider text-amber-400">Vencedor - Faixa {AGE_CATEGORY_LABELS[category]}</p>
                         <h2 className="text-2xl font-black text-display">{winner.memberNames?.[0] || winner.name}</h2>
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           Turma {winner.className || winner.name}
@@ -249,9 +249,9 @@ export default function JudgePanel() {
                     <div className="bg-gradient-to-r from-rose-500/20 to-rose-400/5 border border-rose-500/40 rounded-2xl p-5 flex items-center gap-4">
                       <Swords className="w-10 h-10 text-rose-400 flex-shrink-0" />
                       <div>
-                        <p className="text-xs uppercase font-bold tracking-wider text-rose-400">Empate — Faixa {AGE_CATEGORY_LABELS[category]}</p>
+                        <p className="text-xs uppercase font-bold tracking-wider text-rose-400">Empate - Faixa {AGE_CATEGORY_LABELS[category]}</p>
                         <p className="text-sm font-bold text-slate-100 mt-0.5">
-                          {tiedTeams.map(t => t.className || t.name).join(' vs ')} — {tiedTeams[0]?.correct} respostas certas cada
+                          {tiedTeams.map(t => t.className || t.name).join(' vs ')} - {tiedTeams[0]?.correct} respostas certas cada
                         </p>
                         <p className="text-[11px] text-slate-400 mt-0.5">Aguardando o apresentador iniciar a pergunta de desempate.</p>
                       </div>
@@ -262,7 +262,7 @@ export default function JudgePanel() {
                     <div className="bg-gradient-to-r from-rose-500/20 to-rose-400/5 border border-rose-500/40 rounded-2xl p-5 flex items-center gap-4">
                       <Swords className="w-10 h-10 text-rose-400 flex-shrink-0 animate-pulse" />
                       <div>
-                        <p className="text-xs uppercase font-bold tracking-wider text-rose-400">Desempate em Curso — Faixa {AGE_CATEGORY_LABELS[category]}</p>
+                        <p className="text-xs uppercase font-bold tracking-wider text-rose-400">Desempate em Curso - Faixa {AGE_CATEGORY_LABELS[category]}</p>
                         <p className="text-[11px] text-slate-400 mt-0.5">O apresentador está a conduzir a pergunta de desempate ao vivo.</p>
                       </div>
                     </div>

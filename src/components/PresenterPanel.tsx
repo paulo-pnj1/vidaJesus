@@ -32,7 +32,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [showDbAdmin, setShowDbAdmin] = useState(false);
 
-  // Setup Form State — cada equipa do concurso final representa UM concorrente
+  // Setup Form State - cada equipa do concurso final representa UM concorrente
   // (normalmente o vencedor do casting da turma), por isso o cadastro regista
   // sempre o nome do concorrente junto com a turma, o professor e a faixa etária.
   const [newCompetitorName, setNewCompetitorName] = useState('');
@@ -46,7 +46,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
   const [filterLesson, setFilterLesson] = useState<string>('');
 
-  // Tie-break State — pending (not yet confirmed) answer for whichever
+  // Tie-break State - pending (not yet confirmed) answer for whichever
   // candidate is currently up during a sudden-death tie-break round
   const [tiebreakSelectedOption, setTiebreakSelectedOption] = useState<number | null>(null);
   const [tiebreakChronoResult, setTiebreakChronoResult] = useState<boolean | null>(null);
@@ -81,7 +81,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     }
   }, [questions, filterLesson, selectedQuestionId, teams, gameState.currentTeamId]);
 
-  // Add Team — regista sempre o concorrente junto com turma, professor e faixa
+  // Add Team - regista sempre o concorrente junto com turma, professor e faixa
   const handleAddTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newCompetitorName.trim() && newClassName.trim()) {
@@ -195,7 +195,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     if (eligibleTeams.length === 0) {
       // Everyone in this category has played this round.
       if (gameState.round >= gameState.totalRounds) {
-        // Faixa concluída — o vencedor já está decidido (melhor colocado na
+        // Faixa concluída - o vencedor já está decidido (melhor colocado na
         // tabela); avança para a próxima faixa em jogo, ou termina o concurso
         // se esta era a última.
         const newCompletedCategories = [...(gameState.completedCategories || []), activeCategory];
@@ -227,7 +227,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
           });
         }
       } else {
-        // Next round — still within the same category
+        // Next round - still within the same category
         const nextRound = gameState.round + 1;
         const firstTeam = categoryTeams[Math.floor(Math.random() * categoryTeams.length)];
 
@@ -256,7 +256,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     setSelectedQuestionId('');
   };
 
-  // Manual override button — same logic as the automatic advance above.
+  // Manual override button - same logic as the automatic advance above.
   const handleDrawNextTeam = async () => {
     await advanceToNextCompetitor();
   };
@@ -309,7 +309,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
     });
   };
 
-  // For 'chronological' questions there is no option list — the presenter simply
+  // For 'chronological' questions there is no option list - the presenter simply
   // indicates whether the order the team gave out loud was correct or not.
   const handleSelectChronological = async (isCorrectOrder: boolean) => {
     await updateGameState({
@@ -326,7 +326,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   };
 
   // Reveal the correct answer AND automatically grade + record it.
-  // Correctness is derived purely from what was selected above — no manual marking needed.
+  // Correctness is derived purely from what was selected above - no manual marking needed.
   const handleRevealAnswer = async () => {
     if (!gameState.currentTeamId || !gameState.currentQuestionId) return;
     const question = questions.find(q => q.id === gameState.currentQuestionId);
@@ -366,7 +366,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   };
 
   // Move on after the answer has been revealed & scored. The competitor
-  // answers 2 perguntas per turn — turnQuestionIndex tracks how many of those
+  // answers 2 perguntas per turn - turnQuestionIndex tracks how many of those
   // 2 have been completed. As soon as the 2nd one is done, automatically draw
   // the next competitor (same category) so the projector already shows who's
   // up next, instead of waiting for the presenter to click a button.
@@ -490,7 +490,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
 
     // O desempate também conta para o total de respostas certas/erradas de
     // cada equipa (visível na tabela de jurados e nos resultados finais),
-    // mas NÃO altera a pontuação — o desempate serve para decidir o
+    // mas NÃO altera a pontuação - o desempate serve para decidir o
     // vencedor, não para somar pontos extra.
     if (question) {
       for (const teamId of tb.candidateTeamIds) {
@@ -577,7 +577,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const turnQuestionIndex = gameState.turnQuestionIndex || 0;
   const turnComplete = turnQuestionIndex >= 2; // concorrente já respondeu às 2 perguntas desta rodada
 
-  // List lessons for filter — restrito à faixa etária da equipa da vez
+  // List lessons for filter - restrito à faixa etária da equipa da vez
   const lessonsWithUnusedQuestions = Array.from(new Set(
     questions
       .filter(q => !q.used && (!activeTeam || q.ageCategory === activeTeam.ageCategory))
@@ -639,7 +639,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   <Users className="w-4 h-4 flex-shrink-0" />
                   <div>
                     <p className="text-xs font-bold">Modo: Equipas Livres</p>
-                    <p className="text-[10px] text-blue-600/80">Sem eliminação — todas as equipas competem por pontos até ao fim.</p>
+                    <p className="text-[10px] text-blue-600/80">Sem eliminação - todas as equipas competem por pontos até ao fim.</p>
                   </div>
                 </div>
 
@@ -715,7 +715,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                 </p>
               </div>
 
-              {/* Add Team form — regista o concorrente junto com turma, professor e faixa (idade) */}
+              {/* Add Team form - regista o concorrente junto com turma, professor e faixa (idade) */}
               <form onSubmit={handleAddTeam} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div className="md:col-span-4">
                   <label className="block text-xs font-bold text-slate-600 mb-1">Nome do Concorrente</label>
@@ -819,7 +819,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
         ) : (
           /* LIVE GAME SCREEN */
           <>
-            {/* Presenter Live Controls (full width — classification/stats live only in the Judge Panel) */}
+            {/* Presenter Live Controls (full width - classification/stats live only in the Judge Panel) */}
             <div className="col-span-12 space-y-6">
               
               {/* Active Step status banner */}
@@ -854,7 +854,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     </span>
                   </div>
 
-                  {/* Sortear/Saltar concorrente — normalmente não é preciso: assim que o
+                  {/* Sortear/Saltar concorrente - normalmente não é preciso: assim que o
                       concorrente da vez responde às 2 perguntas, o sistema avança
                       automaticamente. Este botão fica disponível como opção manual
                       (ex.: saltar um concorrente ausente). */}
@@ -869,7 +869,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   )}
                 </div>
 
-                {/* Active Competitor display — concorrente, turma, professor e idade juntos */}
+                {/* Active Competitor display - concorrente, turma, professor e idade juntos */}
                 {activeTeam ? (
                   <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/50 space-y-1">
                     <div className="flex items-center gap-2">
@@ -893,7 +893,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                 )}
               </div>
 
-              {/* RESULTADOS FINAIS — vencedores por categoria e por turma. Só aparece
+              {/* RESULTADOS FINAIS - vencedores por categoria e por turma. Só aparece
                   quando TODAS as categorias já jogaram todas as rodadas normais
                   (status === 'finished'). O vencedor é sempre quem tiver mais
                   respostas certas; havendo empate nesse critério, é preciso
@@ -904,7 +904,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
                     <h3 className="text-lg font-bold text-slate-800 text-display flex items-center gap-2">
                       <Trophy className="w-5 h-5 text-amber-500" />
-                      Resultados Finais — Vencedores por Categoria
+                      Resultados Finais - Vencedores por Categoria
                     </h3>
                     <button
                       onClick={handleToggleResultsOnProjector}
@@ -1008,7 +1008,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                               <div className="p-4 bg-slate-900 text-white space-y-3">
                                 <p className="text-[10px] font-black uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
                                   <Swords className="w-3.5 h-3.5" />
-                                  Desempate {tb.roundNum > 1 ? `— Rodada ${tb.roundNum}` : ''} • {tb.candidateTeamIds.length} equipa{tb.candidateTeamIds.length === 1 ? '' : 's'}
+                                  Desempate {tb.roundNum > 1 ? `- Rodada ${tb.roundNum}` : ''} • {tb.candidateTeamIds.length} equipa{tb.candidateTeamIds.length === 1 ? '' : 's'}
                                 </p>
 
                                 {tbQuestion && (
@@ -1096,7 +1096,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                                         className="w-full text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white py-2.5 rounded-lg cursor-pointer flex items-center justify-center gap-1.5"
                                       >
                                         <Swords className="w-3.5 h-3.5" />
-                                        {tbCorrectIds.length === 0 ? 'Ninguém acertou — Nova Pergunta' : 'Ainda empatados — Nova Pergunta'}
+                                        {tbCorrectIds.length === 0 ? 'Ninguém acertou - Nova Pergunta' : 'Ainda empatados - Nova Pergunta'}
                                       </button>
                                     )}
                                   </div>
@@ -1304,7 +1304,7 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                     </div>
                   )}
 
-                  {/* Action row — grading is now fully automatic based on the selection above */}
+                  {/* Action row - grading is now fully automatic based on the selection above */}
                   <div className="pt-4 border-t">
                     {!gameState.revealed ? (
                       <button
@@ -1326,8 +1326,8 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
                           {(activeQuestion.type === 'chronological'
                             ? gameState.chronologicalResult
                             : gameState.selectedOptionIndex === activeQuestion.correctAnswer)
-                            ? 'Resposta CORRETA — pontos atribuídos automaticamente ✔'
-                            : 'Resposta INCORRETA — registada automaticamente ✖'}
+                            ? 'Resposta CORRETA - pontos atribuídos automaticamente ✔'
+                            : 'Resposta INCORRETA - registada automaticamente ✖'}
                         </div>
                         <button
                           onClick={handleContinue}

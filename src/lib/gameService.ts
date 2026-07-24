@@ -82,7 +82,7 @@ export async function updateGameState(updates: Partial<GameState>) {
 
 // Shared comparator used everywhere teams are ranked (leaderboard, judge panel, winner screen).
 // Ranking order:
-//   1. Número de respostas certas — critério principal para decidir o vencedor
+//   1. Número de respostas certas - critério principal para decidir o vencedor
 //   2. Pontuação (score)
 //   3. Menos respostas erradas
 //   4. Tempo médio de resposta (mais rápido primeiro)
@@ -114,7 +114,7 @@ export function groupTeamsByCategory(teams: Team[]): { category: AgeCategory; te
     .filter((g) => g.teams.length > 0);
 }
 
-// Given a category's teams (already sorted with compareTeams — highest
+// Given a category's teams (already sorted with compareTeams - highest
 // correct-answer count first), returns every team tied for 1st place by
 // number of correct answers. Length 1 means there's no tie; length > 1 means
 // a tie-break question is needed to decide the winner.
@@ -151,7 +151,7 @@ export function subscribeToTeams(onUpdate: (teams: Team[]) => void) {
   // NOTE: we intentionally do NOT use orderBy() with multiple fields here.
   // A Firestore query with two orderBy() clauses on different fields requires a
   // composite index; if that index doesn't exist in the project, onSnapshot()
-  // fails silently (no live updates at all — new teams only showed up after a
+  // fails silently (no live updates at all - new teams only showed up after a
   // manual refresh, once the local cache eventually got the data some other way).
   // Sorting client-side avoids the index requirement entirely and keeps updates instant.
   const q = query(collection(db, 'teams'));
@@ -228,7 +228,7 @@ export async function addTeam(
 // Wraps addTeam() with the exact shape the casting form collects: teacher name,
 // class ("turma") name, age category and the 5 competitor names. The turma name
 // is used as the team's display name everywhere else in the app (leaderboard,
-// projector, judge panel). castingWinnerName is optional — filled in when the
+// projector, judge panel). castingWinnerName is optional - filled in when the
 // teacher ran the live casting mini-quiz before registering.
 export async function registerCastingTeam(
   teacherName: string,
@@ -414,7 +414,7 @@ export async function batchImportQuestions(questions: Omit<Question, 'id' | 'use
   await batch.commit();
 }
 
-// 19. Sync Missing Default Questions — unlike seedQuestionsIfEmpty (which only
+// 19. Sync Missing Default Questions - unlike seedQuestionsIfEmpty (which only
 // runs once, on a totally empty bank), this adds any question from
 // defaultQuestions.ts that isn't in the database yet (matched by id),
 // without touching or duplicating questions that are already there. Useful
@@ -437,7 +437,7 @@ export async function syncMissingDefaultQuestions(): Promise<number> {
   return missing.length;
 }
 
-// 20. Standardize Points — sets the `points` field of every question in the
+// 20. Standardize Points - sets the `points` field of every question in the
 // bank to the same fixed value, so no student is favoured or disadvantaged
 // just because they happened to draw a question worth more or less than a
 // teammate's (important for casting, where each competitor gets a
@@ -462,7 +462,7 @@ export async function standardizeAllQuestionPoints(points: number = 10): Promise
   return count;
 }
 
-// 20b. Remove Out-of-Material Questions — deletes every question in the live
+// 20b. Remove Out-of-Material Questions - deletes every question in the live
 // bank whose `lesson` doesn't match one of the real lesson titles taken from
 // the source material ("A Vida de Jesus", 23 lições). This is meant to clean
 // up leftover/unrelated questions (e.g. from an earlier generic template)
@@ -488,7 +488,7 @@ export async function deleteQuestionsOutsideLessons(validLessons: string[]): Pro
   return count;
 }
 
-// 21. Migration helper — assigns an ageCategory to any question in the bank
+// 21. Migration helper - assigns an ageCategory to any question in the bank
 // that doesn't have one yet (e.g. questions created before this feature),
 // based on its difficulty: easy -> junior, medium -> pleno, hard/very_hard -> senior.
 // Existing ageCategory values are never overwritten. Returns how many were updated.

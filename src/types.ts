@@ -88,14 +88,14 @@ export interface GameState {
   revealed: boolean;
   currentMemberName?: string;
   turnQuestionIndex?: number; // How many of the 2 questions in the current competitor's turn have been answered (0, 1 or 2)
-  activeCategory?: AgeCategory | null; // Faixa etária que está a competir agora — as faixas jogam em sequência: Júnior → Pleno → Sénior
+  activeCategory?: AgeCategory | null; // Faixa etária que está a competir agora - as faixas jogam em sequência: Júnior → Pleno → Sénior
   completedCategories?: AgeCategory[]; // Faixas cujas rodadas normais já terminaram nesta partida
   eliminatedTeamIds?: string[]; // For competition mode
   shuffledOptions?: string[]; // Store shuffled options for the current question
   selectedOptionIndex?: number | null; // Original (non-shuffled) index of the option chosen by the presenter/system as the team's answer
   chronologicalResult?: boolean | null; // For 'chronological' questions: whether the team's spoken order was correct
   tiebreak?: TiebreakState | null; // Active sudden-death tie-break, if one is running
-  categoryWinnerIds?: Partial<Record<AgeCategory, string>>; // Official winner (team id) per category, once decided — set directly when there's no tie, or after a tie-break is resolved
+  categoryWinnerIds?: Partial<Record<AgeCategory, string>>; // Official winner (team id) per category, once decided - set directly when there's no tie, or after a tie-break is resolved
   resultsRevealed?: boolean; // Once the whole contest is 'finished', the projector shows a "júris a avaliar" holding screen until the presenter explicitly reveals the results with this flag
 }
 
