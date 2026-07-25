@@ -421,6 +421,16 @@ export default function PresenterPanel({ gameState }: PresenterPanelProps) {
   const pickTiebreakQuestion = (category: AgeCategory): Question | null => {
     const pool = questions.filter(q => !q.used && q.ageCategory === category);
     if (pool.length === 0) return null;
+    // Nas faixas Pleno e Sénior, o desempate deve usar preferencialmente
+    // perguntas de "versículo incompleto" (qual é o texto do versículo a
+    // memorizar da lição). Só recorremos ao conjunto completo de perguntas
+    // se não houver nenhuma pergunta desse tipo disponível nessa faixa.
+    if (category === 'pleno' || category === 'senior') {
+      const versePool = pool.filter(q => q.type === 'incomplete_verse');
+      if (versePool.length > 0) {
+        return versePool[Math.floor(Math.random() * versePool.length)];
+      }
+    }
     return pool[Math.floor(Math.random() * pool.length)];
   };
 

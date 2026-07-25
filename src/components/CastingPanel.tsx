@@ -429,7 +429,15 @@ export default function CastingPanel() {
     if (pool.length === 0) return null;
     const excludeIds = [...sessionQuestions.map((q) => q.id), ...tiebreakUsedIdsRef.current];
     const fresh = pool.filter((q) => !excludeIds.includes(q.id));
-    const source = fresh.length > 0 ? fresh : pool;
+    let source = fresh.length > 0 ? fresh : pool;
+    // Nas faixas Pleno e Sénior, o desempate deve usar preferencialmente
+    // perguntas de "versículo incompleto" (o versículo a memorizar da
+    // lição). Só recorremos ao conjunto normal se não houver nenhuma
+    // pergunta desse tipo disponível.
+    if (category === 'pleno' || category === 'senior') {
+      const versePool = source.filter((q) => q.type === 'incomplete_verse');
+      if (versePool.length > 0) source = versePool;
+    }
     return source[Math.floor(Math.random() * source.length)];
   };
 
