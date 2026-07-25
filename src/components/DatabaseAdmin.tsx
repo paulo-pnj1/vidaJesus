@@ -8,6 +8,7 @@ import {
   batchImportQuestions,
   autoAssignAgeCategoriesByDifficulty,
   syncMissingDefaultQuestions,
+  resyncEditedDefaultQuestions,
   standardizeAllQuestionPoints,
   deleteQuestionsOutsideLessons
 } from '../lib/gameService';
@@ -57,6 +58,7 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [syncingDefaults, setSyncingDefaults] = useState(false);
+  const [resyncingEdited, setResyncingEdited] = useState(false);
   const [standardizingPoints, setStandardizingPoints] = useState(false);
   const [cleaningOutside, setCleaningOutside] = useState(false);
   
@@ -296,6 +298,37 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
     return defaultQuestions.filter((q) => !existingIds.has(q.id)).length;
   })();
 
+  // Perguntas que já existem no banco (mesmo id) mas cujo texto/opções/resposta
+  // foram corrigidos em defaultQuestions.ts desde que foram semeadas - ex: quando
+  // uma pergunta ambígua ou mal formulada é reescrita no código, isto detecta
+  // quem já está "desatualizado" no Firestore e precisa de ser corrigido.
+  const editedDefaultQuestionsCount = (() => {
+    const defaultsById = new Map(defaultQuestions.map((q) => [q.id, q]));
+    return questions.filter((q) => {
+      const source = defaultsById.get(q.id);
+      if (!source) return false;
+      return (
+        q.question !== source.question ||
+        JSON.stringify(q.options || []) !== JSON.stringify(source.options || []) ||
+        q.correctAnswer !== source.correctAnswer
+      );
+    }).length;
+  })();
+
+  const handleResyncEditedDefaults = async () => {
+    setResyncingEdited(true);
+    try {
+      const count = await resyncEditedDefaultQuestions();
+      alert(count > 0
+        ? `${count} pergunta(s) foram corrigidas com o texto/opções mais recentes do banco padrão.`
+        : 'Todas as perguntas já estão com o texto mais recente.');
+    } catch (err: any) {
+      alert('Erro ao corrigir perguntas: ' + err.message);
+    } finally {
+      setResyncingEdited(false);
+    }
+  };
+
   const handleSyncMissingDefaults = async () => {
     setSyncingDefaults(true);
     try {
@@ -424,6 +457,17 @@ export default function DatabaseAdmin({ questions, onClose }: DatabaseAdminProps
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 {syncingDefaults ? 'A adicionar...' : `Adicionar Perguntas Padrão Novas (${missingDefaultQuestionsCount})`}
+              </button>
+            )}
+            {editedDefaultQuestionsCount > 0 && (
+              <button
+                onClick={handleResyncEditedDefaults}
+                disabled={resyncingEdited}
+                title="Corrige o texto/opções de perguntas que já existem aqui mas que foram reescritas no banco padrão (ex: perguntas com formulação confusa que foram melhoradas)"
+                className="flex items-center gap-2 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                {resyncingEdited ? 'A corrigir...' : `Corrigir Perguntas Desatualizadas (${editedDefaultQuestionsCount})`}
               </button>
             )}
             {questionsMissingCategory > 0 && (

@@ -437,6 +437,50 @@ export async function syncMissingDefaultQuestions(): Promise<number> {
   return missing.length;
 }
 
+// 19b. Resync Edited Default Questions - unlike syncMissingDefaultQuestions
+// (which only ADDS questions that don't exist yet), this fixes questions that
+// DO already exist in Firestore (matched by id) but whose text/options/answer
+// in defaultQuestions.ts have since been corrected/edited in the source code.
+// This is needed because once a question is seeded, editing defaultQuestions.ts
+// alone has no effect on an event that already has data in the database -
+// this function is what actually pushes those text corrections live.
+// Only the question/options/correctAnswer fields are overwritten; everything
+// else (used, points already standardized, etc.) is left untouched.
+// Returns how many questions were corrected.
+export async function resyncEditedDefaultQuestions(): Promise<number> {
+  const qCol = collection(db, 'questions');
+  const snapshot = await getDocs(qCol);
+  const defaultsById = new Map(defaultQuestions.map((q) => [q.id, q]));
+
+  const batch = writeBatch(db);
+  let count = 0;
+
+  snapshot.forEach((docSnap) => {
+    const current = docSnap.data() as Question;
+    const source = defaultsById.get(docSnap.id);
+    if (!source) return;
+
+    const optionsChanged =
+      JSON.stringify(current.options || []) !== JSON.stringify(source.options || []);
+    const questionChanged = current.question !== source.question;
+    const answerChanged = current.correctAnswer !== source.correctAnswer;
+
+    if (questionChanged || optionsChanged || answerChanged) {
+      batch.update(docSnap.ref, {
+        question: source.question,
+        options: source.options,
+        correctAnswer: source.correctAnswer,
+      });
+      count++;
+    }
+  });
+
+  if (count > 0) {
+    await batch.commit();
+  }
+  return count;
+}
+
 // 20. Standardize Points - sets the `points` field of every question in the
 // bank to the same fixed value, so no student is favoured or disadvantaged
 // just because they happened to draw a question worth more or less than a
