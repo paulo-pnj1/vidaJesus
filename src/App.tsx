@@ -5,6 +5,7 @@ import PresenterPanel from './components/PresenterPanel';
 import ProjectorPanel from './components/ProjectorPanel';
 import JudgePanel from './components/JudgePanel';
 import CastingPanel from './components/CastingPanel';
+import InstallPWAButton from './components/InstallPWAButton';
 import { Tv, Gamepad2, Scale, BookOpen, Sparkles, ArrowRight, Lock, User, LogOut, ClipboardList } from 'lucide-react';
 
 type Role = 'presenter' | 'projector' | 'judge' | 'casting';
@@ -257,6 +258,9 @@ export default function App() {
                   <Sparkles className="w-3.5 h-3.5" />
                   Sistema de Concurso Digital Sincronizado
                 </div>
+                <div className="flex justify-center">
+                  <InstallPWAButton />
+                </div>
                 <h1 className="text-4xl md:text-6xl font-black text-display uppercase tracking-tight leading-none bg-gradient-to-r from-amber-400 via-amber-200 to-yellow-500 bg-clip-text text-transparent">
                   Desafio Bíblico
                 </h1>
@@ -389,7 +393,15 @@ export default function App() {
   return (
     <>
       {renderActivePanel()}
-      
+
+      {/* Floating install button, shown even when a panel is already active
+          (e.g. returning users whose role was restored from localStorage) */}
+      {role && (
+        <div className="fixed bottom-4 left-4 z-50">
+          <InstallPWAButton />
+        </div>
+      )}
+
       {/* Floating Elegant Role Switcher for Multi-device Sandbox Simulation */}
       {role && (
         <button
